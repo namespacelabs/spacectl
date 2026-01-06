@@ -1,0 +1,198 @@
+package cmd
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"maps"
+	"os"
+	"slices"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/namespacelabs/space/internal/cache"
+	"github.com/namespacelabs/space/internal/cache/mode"
+)
+
+const defaultCacheRootEnv = "NSC_CACHE_PATH"
+
+func NewCacheCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "cache",
+		Short: "Take full advantage of Namespace volumes and caching infrastructure",
+	}
+
+	cmd.AddCommand(newCacheModesCmd())
+	cmd.AddCommand(newCacheMountCmd())
+
+	return cmd
+}
+
+func newCacheModesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "modes",
+		Short: "List available cache modes",
+	}
+
+	outputJSON := cmd.Flags().Bool("json", false, "Output result as JSON to stdout.")
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		modes := mode.DefaultModes()
+		detected, err := modes.Detect(cmd.Context(), mode.DetectRequest{})
+		if err != nil {
+			return err
+		}
+
+		var w io.Writer = os.Stdout
+		if *outputJSON {
+			return outputModesJSON(w, modes, detected)
+		}
+
+		outputModesText(w, modes, detected)
+		return nil
+	}
+
+	return cmd
+}
+
+func newCacheMountCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "mount",
+		Short: "Restore cache paths from a Namespace volume",
+	}
+
+	dryRun := cmd.Flags().Bool("dry-run", !isCI(), "If true, mounting of paths is skipped.")
+	cacheRoot := cmd.Flags().String("cache-root", os.Getenv(defaultCacheRootEnv), "Override the root path where cache volumes are mounted.")
+	detectModes := cmd.Flags().StringSlice("detect", []string{}, "Detects cache mode(s) based on environment. Supply '*' to enable all detectors.")
+	manualModes := cmd.Flags().StringSlice("mode", []string{}, "Explicit cache mode(s) to enable.")
+	manualPaths := cmd.Flags().StringSlice("path", []string{}, "Explicit cache path(s) to enable.")
+	outputJSON := cmd.Flags().Bool("json", false, "Output result as JSON to stdout.")
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		mounter, err := cache.NewMounter(*cacheRoot)
+		if err != nil {
+			return err
+		}
+
+		// In dry-run mode, we skip mounting and only report what would be done.
+		mounter.DestructiveMode = !*dryRun
+
+		result, err := mounter.Mount(cmd.Context(), cache.MountRequest{
+			DetectAllModes: len(*detectModes) == 1 && (*detectModes)[0] == "*",
+			DetectModes:    *detectModes,
+			ManualModes:    *manualModes,
+			ManualPaths:    *manualPaths,
+		})
+		if err != nil {
+			return err
+		}
+
+		var w io.Writer = os.Stdout
+		if *outputJSON {
+			return outputMountJSON(w, result)
+		}
+
+		outputMountText(w, result)
+		return nil
+	}
+
+	return cmd
+}
+
+func outputModesJSON(w io.Writer, modes, detected mode.Modes) error {
+	detectedSet := make(map[string]bool, len(detected))
+	for _, m := range detected {
+		detectedSet[m.Name()] = true
+	}
+
+	result := make(map[string]map[string]bool, len(modes))
+	for _, m := range modes {
+		result[m.Name()] = map[string]bool{
+			"detected": detectedSet[m.Name()],
+		}
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(map[string]any{"modes": result})
+}
+
+func outputModesText(w io.Writer, modes, detected mode.Modes) {
+	detectedSet := make(map[string]bool, len(detected))
+	for _, m := range detected {
+		detectedSet[m.Name()] = true
+	}
+
+	undetectedSet := make(map[string]bool, len(modes)-len(detected))
+	for _, name := range modes.Names() {
+		if !detectedSet[name] {
+			undetectedSet[name] = true
+		}
+	}
+
+	fmt.Fprintf(w, "Detected:\n")
+	if len(detectedSet) == 0 {
+		fmt.Fprintf(w, "None\n")
+	} else {
+		keys := slices.Collect(maps.Keys(detectedSet))
+		slices.Sort(keys)
+		fmt.Fprintf(w, "- %s\n", strings.Join(keys, "\n- "))
+	}
+	fmt.Fprintf(w, "\n")
+
+	fmt.Fprintf(w, "Undetected:\n")
+	if len(undetectedSet) == 0 {
+		fmt.Fprintf(w, "None\n")
+	} else {
+		keys := slices.Collect(maps.Keys(undetectedSet))
+		slices.Sort(keys)
+		fmt.Fprintf(w, "- %s\n", strings.Join(keys, "\n- "))
+	}
+}
+
+func outputMountJSON(w io.Writer, result cache.MountResponse) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(result)
+}
+
+func outputMountText(w io.Writer, result cache.MountResponse) {
+	if !result.Output.DestructiveMode {
+		fmt.Fprintf(w, "Dry Run mode enabled.\n\n")
+	}
+
+	if len(result.Input.Modes) > 0 {
+		fmt.Fprintf(w, "Used modes: %v\n", strings.Join(result.Input.Modes, " "))
+	} else {
+		fmt.Fprintf(w, "No modes used\n")
+	}
+
+	if len(result.Input.Paths) > 0 {
+		fmt.Fprintf(w, "Used paths: %v\n", strings.Join(result.Input.Paths, ", "))
+	} else {
+		fmt.Fprintf(w, "No paths used\n")
+	}
+
+	fmt.Fprintf(w, "\n")
+
+	if len(result.Output.Mounts) > 0 {
+		fmt.Fprintf(w, "%d directorie(s) mounted\n", len(result.Output.Mounts))
+
+		var cacheHits int
+		for _, mount := range result.Output.Mounts {
+			if mount.CacheHit {
+				cacheHits++
+			}
+		}
+		fmt.Fprintf(w, "Cache hit rate: %d/%d\n\n", cacheHits, len(result.Output.Mounts))
+	}
+
+	fmt.Fprintf(w, "%s of %s used\n", result.Output.DiskUsage.Used, result.Output.DiskUsage.Total)
+}
+
+// isCI returns true if running in a CI environment.
+// Currently supports Github Actions and GitLab CI.
+func isCI() bool {
+	return os.Getenv("GITHUB_ACTIONS") == "true" || os.Getenv("GITLAB_CI") == "true"
+}
