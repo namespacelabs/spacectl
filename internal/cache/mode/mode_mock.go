@@ -26,6 +26,9 @@ var _ Executor = &ExecutorMock{}
 //			OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
 //				panic("mock out the Output method")
 //			},
+//			ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+//				panic("mock out the ReadDir method")
+//			},
 //			StatFunc: func(name string) (os.FileInfo, error) {
 //				panic("mock out the Stat method")
 //			},
@@ -42,6 +45,9 @@ type ExecutorMock struct {
 	// OutputFunc mocks the Output method.
 	OutputFunc func(cmd *exec.Cmd) ([]byte, error)
 
+	// ReadDirFunc mocks the ReadDir method.
+	ReadDirFunc func(name string) ([]os.DirEntry, error)
+
 	// StatFunc mocks the Stat method.
 	StatFunc func(name string) (os.FileInfo, error)
 
@@ -57,6 +63,11 @@ type ExecutorMock struct {
 			// Cmd is the cmd argument value.
 			Cmd *exec.Cmd
 		}
+		// ReadDir holds details about calls to the ReadDir method.
+		ReadDir []struct {
+			// Name is the name argument value.
+			Name string
+		}
 		// Stat holds details about calls to the Stat method.
 		Stat []struct {
 			// Name is the name argument value.
@@ -65,6 +76,7 @@ type ExecutorMock struct {
 	}
 	lockLookPath sync.RWMutex
 	lockOutput   sync.RWMutex
+	lockReadDir  sync.RWMutex
 	lockStat     sync.RWMutex
 }
 
@@ -129,6 +141,38 @@ func (mock *ExecutorMock) OutputCalls() []struct {
 	mock.lockOutput.RLock()
 	calls = mock.calls.Output
 	mock.lockOutput.RUnlock()
+	return calls
+}
+
+// ReadDir calls ReadDirFunc.
+func (mock *ExecutorMock) ReadDir(name string) ([]os.DirEntry, error) {
+	if mock.ReadDirFunc == nil {
+		panic("ExecutorMock.ReadDirFunc: method is nil but Executor.ReadDir was just called")
+	}
+	callInfo := struct {
+		Name string
+	}{
+		Name: name,
+	}
+	mock.lockReadDir.Lock()
+	mock.calls.ReadDir = append(mock.calls.ReadDir, callInfo)
+	mock.lockReadDir.Unlock()
+	return mock.ReadDirFunc(name)
+}
+
+// ReadDirCalls gets all the calls that were made to ReadDir.
+// Check the length with:
+//
+//	len(mockedExecutor.ReadDirCalls())
+func (mock *ExecutorMock) ReadDirCalls() []struct {
+	Name string
+} {
+	var calls []struct {
+		Name string
+	}
+	mock.lockReadDir.RLock()
+	calls = mock.calls.ReadDir
+	mock.lockReadDir.RUnlock()
 	return calls
 }
 

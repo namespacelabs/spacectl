@@ -15,8 +15,27 @@ import (
 func DefaultModes() Modes {
 	return Modes{
 		AptProvider{},
+		BrewProvider{},
+		BunProvider{},
+		CocoapodsProvider{},
+		ComposerProvider{},
+		DenoProvider{},
 		GoProvider{},
 		GolangCILintProvider{},
+		GradleProvider{},
+		MavenProvider{},
+		MiseProvider{},
+		NixProvider{},
+		PlaywrightProvider{},
+		PnpmProvider{},
+		PoetryProvider{},
+		PythonProvider{},
+		RubyProvider{},
+		RustProvider{},
+		SwiftPMProvider{},
+		UVProvider{},
+		XcodeProvider{},
+		YarnProvider{},
 	}
 }
 
@@ -89,7 +108,7 @@ func (modes Modes) Detect(ctx context.Context, req DetectRequest) (Modes, error)
 
 // Plan runs planning for all modes in parallel and returns their results.
 func (modes Modes) Plan(ctx context.Context, req PlanRequest) (map[string]PlanResult, error) {
-	req.enabledModes = modes.Names()
+	req.EnabledModes = modes.Names()
 	if req.Exec == nil {
 		req.Exec = DefaultExecutor{}
 	}
@@ -130,8 +149,8 @@ type DetectRequest struct {
 }
 
 type PlanRequest struct {
+	EnabledModes []string
 	Exec         Executor
-	enabledModes []string
 }
 
 type PlanResult struct {
@@ -144,6 +163,7 @@ type Executor interface {
 	LookPath(file string) (string, error)
 	Output(*exec.Cmd) ([]byte, error)
 	Stat(name string) (os.FileInfo, error)
+	ReadDir(name string) ([]os.DirEntry, error)
 }
 
 type DefaultExecutor struct{}
@@ -158,4 +178,8 @@ func (e DefaultExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
 
 func (e DefaultExecutor) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
+}
+
+func (e DefaultExecutor) ReadDir(name string) ([]os.DirEntry, error) {
+	return os.ReadDir(name)
 }

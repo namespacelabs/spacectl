@@ -68,6 +68,7 @@ func newCacheMountCmd() *cobra.Command {
 	manualModes := cmd.Flags().StringSlice("mode", []string{}, "Explicit cache mode(s) to enable.")
 	manualPaths := cmd.Flags().StringSlice("path", []string{}, "Explicit cache path(s) to enable.")
 	outputJSON := cmd.Flags().Bool("json", false, "Output result as JSON to stdout.")
+	evalFile := cmd.Flags().String("eval-file", "", "Write a file that can be sourced to export environment variables.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		mounter, err := cache.NewMounter(*cacheRoot)
@@ -86,6 +87,12 @@ func newCacheMountCmd() *cobra.Command {
 		})
 		if err != nil {
 			return err
+		}
+
+		if *evalFile != "" {
+			if err := writeEvalFile(*evalFile, result); err != nil {
+				return fmt.Errorf("writing eval file: %w", err)
+			}
 		}
 
 		var w io.Writer = os.Stdout
@@ -149,6 +156,19 @@ func outputModesText(w io.Writer, modes, detected mode.Modes) {
 		slices.Sort(keys)
 		fmt.Fprintf(w, "- %s\n", strings.Join(keys, "\n- "))
 	}
+}
+
+func writeEvalFile(path string, result cache.MountResponse) error {
+	if len(result.Output.AddEnvs) == 0 {
+		return nil
+	}
+
+	var b strings.Builder
+	keys := slices.Sorted(maps.Keys(result.Output.AddEnvs))
+	for _, k := range keys {
+		fmt.Fprintf(&b, "export %s=%q\n", k, result.Output.AddEnvs[k])
+	}
+	return os.WriteFile(path, []byte(b.String()), 0o644)
 }
 
 func outputMountJSON(w io.Writer, result cache.MountResponse) error {
