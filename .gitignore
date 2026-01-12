@@ -1,2 +1,2 @@
-space
-tmp/
+.envrc
+.direnv

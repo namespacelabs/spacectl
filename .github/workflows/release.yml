@@ -17,10 +17,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: Set up Nix cache
+        uses: namespacelabs/nscloud-cache-action@v1
         with:
-          go-version-file: 'go.mod'
+          path: /nix
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            system-features = kvm nixos-test
+
+      - name: Switch into Nix Shell
+        uses: lukas-mertens/switch-into-nix-shell@ce1f85f07ceba523ece60c73eb2b18d1fa5503f5
+        with:
+          install_nix: false
+
+      - name: Set up cache
+        uses: namespacelabs/nscloud-cache-action@v1
+        with:
+          cache: go
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
