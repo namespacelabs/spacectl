@@ -10,7 +10,10 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    runs-on:
+      - nscloud-ubuntu-22.04-amd64-4x16-with-cache
+      - nscloud-cache-size-20gb
+      - nscloud-cache-tag-space
     steps:
       - name: Checkout
         uses: actions/checkout@v6
