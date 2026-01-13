@@ -12,4 +12,4 @@
 - Formatting: gofumpt with extra rules enabled
 - Errors: wrap with `fmt.Errorf("context: %w", err)`
 - Logging: use `log/slog` (not log package)
-- Tests: use `_test` package suffix, `require` for assertions
+- Tests: use `_test` package suffix to make sure we test the public API

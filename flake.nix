@@ -25,6 +25,8 @@
           go_1_25
           golangci-lint
           moq
+
+          goreleaser
         ]
         ++ (if pkgs.stdenv.isDarwin then [ apple-sdk_15 ] else []);
       };

@@ -1,6 +1,16 @@
-# space
+<p>
+  <a href="https://namespace.so">
+    <img src="https://storage.googleapis.com/namespacelabs-docs-assets/gh/banner.svg" height="100">
+  </a>
+</p>
 
-CLI that powers core logic across Namespace platform integrations.
+<p>
+  <b><i>Namespace</i> is a development-optimized compute platform. It improves the performance and observability of Docker builds, GitHub Actions, and more, without requiring workflow changes. Learn more at https://namespace.so.</b>
+</p>
+
+# 🧑🏻‍🚀 space
+
+CLI that powers core logic across Namespace integrations.
 
 ## Installation
 
@@ -92,3 +102,11 @@ space cache mount --path=/some/path
 # Combine detection with explicit paths
 space cache mount --detect='*' --path=/custom/cache
 ```
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
+
+## Security
+
+Please report security issues privately as described in [SECURITY.md](./SECURITY.md).
