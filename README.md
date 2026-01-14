@@ -10,7 +10,7 @@
 
 # 🧑🏻‍🚀 space
 
-CLI that powers core logic across Namespace integrations.
+`space` is a CLI designed to be run on Namespace runners, enabling various integrations.
 
 ## Installation
 
