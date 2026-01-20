@@ -1020,6 +1020,45 @@ func TestMount(t *testing.T) {
 		require.Error(t, err)
 		require.ErrorContains(t, err, "mount failed")
 	})
+
+	t.Run("tilde path expansion", func(t *testing.T) {
+		homeDir, err := os.UserHomeDir()
+		require.NoError(t, err)
+
+		cacheRoot := t.TempDir()
+		exec := &cache.ExecutorMock{
+			MountFunc:     func(ctx context.Context, from, to string) error { return nil },
+			StatFunc:      func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+			MkdirAllFunc:  func(path string, perm os.FileMode) error { return nil },
+			WriteFileFunc: func(name string, data []byte, perm os.FileMode) error { return nil },
+			DiskUsageFunc: func(ctx context.Context, path string) (cache.DiskUsage, error) {
+				return cache.DiskUsage{}, fmt.Errorf("not implemented")
+			},
+		}
+
+		m := cache.Mounter{
+			DestructiveMode: true,
+			CacheRoot:       cacheRoot,
+			Exec:            exec,
+			Modes: mode.Modes{
+				&mode.ModeProviderMock{
+					NameFunc:   func() string { return "test" },
+					DetectFunc: func(ctx context.Context, req mode.DetectRequest) (bool, error) { return false, nil },
+					PlanFunc: func(ctx context.Context, req mode.PlanRequest) (mode.PlanResult, error) {
+						return mode.PlanResult{MountPaths: []string{"~/.cache/test"}}, nil
+					},
+				},
+			},
+		}
+
+		_, err = m.Mount(t.Context(), cache.MountRequest{ManualModes: []string{"test"}})
+		require.NoError(t, err)
+
+		mountCalls := exec.MountCalls()
+		require.Len(t, mountCalls, 1)
+		require.Equal(t, filepath.Join(cacheRoot, homeDir, ".cache/test"), mountCalls[0].From)
+		require.Equal(t, filepath.Join(homeDir, ".cache/test"), mountCalls[0].To)
+	})
 }
 
 func filterMounts(mounts []cache.MountResult) []cache.MountResult {

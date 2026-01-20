@@ -200,6 +200,11 @@ func (m Mounter) mountPaths(ctx context.Context, paths []string, result *MountRe
 }
 
 func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountResult, error) {
+	path, err := resolveHome(path)
+	if err != nil {
+		return MountResult{}, fmt.Errorf("resolving path: %w", err)
+	}
+
 	cachePath := filepath.Join(m.CacheRoot, path)
 
 	mount := MountResult{
@@ -208,7 +213,7 @@ func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountRes
 		MountPath: path,
 	}
 
-	_, err := m.Exec.Stat(cachePath)
+	_, err = m.Exec.Stat(cachePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return MountResult{}, fmt.Errorf("stat cache path %q: %w", cachePath, err)
 	}
@@ -451,6 +456,31 @@ func sudoMkdirP(ctx context.Context, path string) error {
 	}
 
 	return nil
+}
+
+// resolveHome expands a leading ~ in the path to the user's home directory.
+// If the path doesn't start with ~, it is returned unchanged.
+func resolveHome(path string) (string, error) {
+	if !strings.HasPrefix(path, "~") {
+		return path, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("get user home dir: %w", err)
+	}
+
+	if path == "~" {
+		return home, nil
+	}
+
+	// Handle ~/... pattern
+	if strings.HasPrefix(path, "~/") {
+		return filepath.Join(home, path[2:]), nil
+	}
+
+	// ~something without / is not supported (e.g., ~user)
+	return path, nil
 }
 
 // ancestors returns all ancestor directories of the given path, from root to the path itself.
