@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -28,9 +29,14 @@ func main() {
 	}
 
 	loglvl := cli.PersistentFlags().String("log_level", defaultLogLevel, "Log level (debug, info, warn, error)")
+	outputFlag := cli.PersistentFlags().StringP("output", "o", "plain", "Output format: plain or json.")
 
 	cli.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		return setLogger(*loglvl)
+		logDest := io.Writer(os.Stdout)
+		if *outputFlag == "json" {
+			logDest = os.Stderr
+		}
+		return setLogger(*loglvl, logDest)
 	}
 
 	cli.AddCommand(cmd.NewCacheCmd())
@@ -42,27 +48,27 @@ func main() {
 	}
 }
 
-func setLogger(lvl string) error {
+func setLogger(lvl string, w io.Writer) error {
 	if strings.ToLower(os.Getenv("GITHUB_ACTIONS")) == "true" {
-		return withGithubLogger()
+		return withGithubLogger(w)
 	}
 
-	return withDefaultLogger(lvl)
+	return withDefaultLogger(lvl, w)
 }
 
-func withGithubLogger() error {
-	logger := slog.New(log.NewGithubHandler(os.Stdout))
+func withGithubLogger(w io.Writer) error {
+	logger := slog.New(log.NewGithubHandler(w))
 	slog.SetDefault(logger)
 	return nil
 }
 
-func withDefaultLogger(lvl string) error {
+func withDefaultLogger(lvl string, w io.Writer) error {
 	slogLvl, err := parseLogLevel(lvl)
 	if err != nil {
 		return fmt.Errorf("invalid log level: %w", err)
 	}
 
-	logger := slog.New(log.NewPlainHandler(os.Stdout, &log.PlainHandlerOptions{
+	logger := slog.New(log.NewPlainHandler(w, &log.PlainHandlerOptions{
 		Level: slogLvl,
 	}))
 	slog.SetDefault(logger)

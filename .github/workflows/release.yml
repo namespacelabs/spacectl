@@ -36,10 +36,9 @@ jobs:
         uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
 
       - name: Set up cache
-        uses: namespacelabs/nscloud-cache-action@652b0109faeacbfebc50004c304dfd0c2235ea17 # v1.3.0-beta.1
+        uses: namespacelabs/nscloud-cache-action@3b6904f6f03450be8ecb4149ac410edc2eb5f3f1 # v1.3.0-beta.2
         with:
           space-enabled: true
-          space-version: '0.2.0-beta.1'
           mode: go
 
       - name: Run GoReleaser

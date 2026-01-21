@@ -16,11 +16,9 @@ func NewVersionCmd(version, commit, date string) *cobra.Command {
 		Short: "Print the version number of the Space CLI",
 	}
 
-	outputFlag := cmd.Flags().StringP("output", "o", "plain", "Output format: plain or json.")
-
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		var w io.Writer = os.Stdout
-		if *outputFlag == "json" {
+		if output, _ := cmd.Flags().GetString("output"); output == "json" {
 			return outputVersionJSON(w, version, commit, date)
 		}
 

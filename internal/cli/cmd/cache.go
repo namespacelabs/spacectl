@@ -36,8 +36,6 @@ func newCacheModesCmd() *cobra.Command {
 		Short: "List available cache modes",
 	}
 
-	outputFlag := cmd.Flags().StringP("output", "o", "plain", "Output format: plain or json.")
-
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		modes := mode.DefaultModes()
 		detected, err := modes.Detect(cmd.Context(), mode.DetectRequest{})
@@ -46,7 +44,7 @@ func newCacheModesCmd() *cobra.Command {
 		}
 
 		var w io.Writer = os.Stdout
-		if *outputFlag == "json" {
+		if output, _ := cmd.Flags().GetString("output"); output == "json" {
 			return outputModesJSON(w, modes, detected)
 		}
 
@@ -68,7 +66,6 @@ func newCacheMountCmd() *cobra.Command {
 	detectModes := cmd.Flags().StringSlice("detect", []string{}, "Detects cache mode(s) based on environment. Supply '*' to enable all detectors.")
 	manualModes := cmd.Flags().StringSlice("mode", []string{}, "Explicit cache mode(s) to enable.")
 	manualPaths := cmd.Flags().StringSlice("path", []string{}, "Explicit cache path(s) to enable.")
-	outputFlag := cmd.Flags().StringP("output", "o", "plain", "Output format: plain or json.")
 	evalFile := cmd.Flags().String("eval_file", "", "Write a file that can be sourced to export environment variables.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -100,7 +97,7 @@ func newCacheMountCmd() *cobra.Command {
 		}
 
 		var w io.Writer = os.Stdout
-		if *outputFlag == "json" {
+		if output, _ := cmd.Flags().GetString("output"); output == "json" {
 			return outputMountJSON(w, result)
 		}
 
