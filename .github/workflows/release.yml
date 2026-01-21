@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Nix cache
-        uses: namespacelabs/nscloud-cache-action@446d8f390563cd54ca27e8de5bdb816f63c0b706 # v1
+        uses: namespacelabs/nscloud-cache-action@3b6904f6f03450be8ecb4149ac410edc2eb5f3f1 # v1.3.0-beta.2
         with:
           path: /nix
 

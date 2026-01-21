@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
       - name: Set up Nix cache
-        uses: namespacelabs/nscloud-cache-action@475da9d129ebc98dff02bddee62bec010beda890 # v1.3.0-beta.1
+        uses: namespacelabs/nscloud-cache-action@3b6904f6f03450be8ecb4149ac410edc2eb5f3f1 # v1.3.0-beta.2
         with:
           space-enabled: true
           path: /nix
@@ -36,7 +36,7 @@ jobs:
         uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
 
       - name: Set up cache
-        uses: namespacelabs/nscloud-cache-action@475da9d129ebc98dff02bddee62bec010beda890 # v1.3.0-beta.1
+        uses: namespacelabs/nscloud-cache-action@3b6904f6f03450be8ecb4149ac410edc2eb5f3f1 # v1.3.0-beta.2
         with:
           space-enabled: true
           mode: |
@@ -65,8 +65,7 @@ jobs:
       - nscloud-cache-tag-space
     strategy:
       matrix:
-        # space-version: ['', latest] # latest is currently broken
-        space-version: ['']
+        space-version: ['', latest]
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
 
