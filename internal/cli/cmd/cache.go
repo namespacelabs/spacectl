@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"os"
 	"slices"
@@ -79,7 +80,7 @@ func newCacheMountCmd() *cobra.Command {
 		// In dry-run mode, we skip mounting and only report what would be done.
 		mounter.DestructiveMode = !*dryRun
 		if !mounter.DestructiveMode {
-			fmt.Fprintf(os.Stdout, "Dry Run mode enabled.\n")
+			slog.Info("Dry Run mode enabled.")
 		}
 
 		result, err := mounter.Mount(cmd.Context(), cache.MountRequest{
@@ -128,7 +129,7 @@ func outputModesJSON(w io.Writer, modes, detected mode.Modes) error {
 	return enc.Encode(map[string]any{"modes": result})
 }
 
-func outputModesText(w io.Writer, modes, detected mode.Modes) {
+func outputModesText(_ io.Writer, modes, detected mode.Modes) {
 	detectedSet := make(map[string]bool, len(detected))
 	for _, m := range detected {
 		detectedSet[m.Name()] = true
@@ -141,23 +142,22 @@ func outputModesText(w io.Writer, modes, detected mode.Modes) {
 		}
 	}
 
-	fmt.Fprintf(w, "Detected:\n")
+	slog.Info("Detected:")
 	if len(detectedSet) == 0 {
-		fmt.Fprintf(w, "None\n")
+		slog.Info("None")
 	} else {
 		keys := slices.Collect(maps.Keys(detectedSet))
 		slices.Sort(keys)
-		fmt.Fprintf(w, "- %s\n", strings.Join(keys, "\n- "))
+		slog.Info(fmt.Sprintf("- %s", strings.Join(keys, "\n- ")))
 	}
-	fmt.Fprintf(w, "\n")
 
-	fmt.Fprintf(w, "Undetected:\n")
+	slog.Info("Undetected:")
 	if len(undetectedSet) == 0 {
-		fmt.Fprintf(w, "None\n")
+		slog.Info("None")
 	} else {
 		keys := slices.Collect(maps.Keys(undetectedSet))
 		slices.Sort(keys)
-		fmt.Fprintf(w, "- %s\n", strings.Join(keys, "\n- "))
+		slog.Info(fmt.Sprintf("- %s", strings.Join(keys, "\n- ")))
 	}
 }
 
@@ -180,23 +180,21 @@ func outputMountJSON(w io.Writer, result cache.MountResponse) error {
 	return enc.Encode(result)
 }
 
-func outputMountText(w io.Writer, result cache.MountResponse) {
+func outputMountText(_ io.Writer, result cache.MountResponse) {
 	if len(result.Input.Modes) > 0 {
-		fmt.Fprintf(w, "Used modes: %v\n", strings.Join(result.Input.Modes, " "))
+		slog.Info(fmt.Sprintf("Used modes: %v", strings.Join(result.Input.Modes, " ")))
 	} else {
-		fmt.Fprintf(w, "No modes used\n")
+		slog.Info("No modes used")
 	}
 
 	if len(result.Input.Paths) > 0 {
-		fmt.Fprintf(w, "Used paths: %v\n", strings.Join(result.Input.Paths, ", "))
+		slog.Info(fmt.Sprintf("Used paths: %v", strings.Join(result.Input.Paths, ", ")))
 	} else {
-		fmt.Fprintf(w, "No paths used\n")
+		slog.Info("No paths used")
 	}
 
-	fmt.Fprintf(w, "\n")
-
 	if len(result.Output.Mounts) > 0 {
-		fmt.Fprintf(w, "%d directorie(s) mounted\n", len(result.Output.Mounts))
+		slog.Info(fmt.Sprintf("%d directorie(s) mounted", len(result.Output.Mounts)))
 
 		var cacheHits int
 		for _, mount := range result.Output.Mounts {
@@ -204,10 +202,10 @@ func outputMountText(w io.Writer, result cache.MountResponse) {
 				cacheHits++
 			}
 		}
-		fmt.Fprintf(w, "Cache hit rate: %d/%d\n\n", cacheHits, len(result.Output.Mounts))
+		slog.Info(fmt.Sprintf("Cache hit rate: %d/%d", cacheHits, len(result.Output.Mounts)))
 	}
 
-	fmt.Fprintf(w, "%s of %s used\n", result.Output.DiskUsage.Used, result.Output.DiskUsage.Total)
+	slog.Info(fmt.Sprintf("%s of %s used", result.Output.DiskUsage.Used, result.Output.DiskUsage.Total))
 }
 
 // isCI returns true if running in a CI environment.

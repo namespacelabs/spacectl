@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -40,6 +41,6 @@ func outputVersionJSON(w io.Writer, version, commit, date string) error {
 	})
 }
 
-func outputVersionText(w io.Writer, version, commit, date string) {
-	fmt.Fprintf(w, "Space CLI %s (commit: %s, built at: %s)\n", version, commit, date)
+func outputVersionText(_ io.Writer, version, commit, date string) {
+	slog.Info(fmt.Sprintf("Space CLI %s (commit: %s, built at: %s)", version, commit, date))
 }

@@ -221,11 +221,11 @@ func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountRes
 
 	logAttrs := []any{slog.String("from", cachePath), slog.String("to", path)}
 	if !m.DestructiveMode {
-		slog.DebugContext(ctx, "dry-run: would mount cache path", logAttrs...)
+		slog.Debug("dry-run: would mount cache path", logAttrs...)
 		return mount, nil
 	}
 
-	slog.DebugContext(ctx, "mounting cache path", logAttrs...)
+	slog.Debug("mounting cache path", logAttrs...)
 
 	if err := m.Exec.Mount(ctx, cachePath, path); err != nil {
 		return MountResult{}, fmt.Errorf("mounting %q to %q: %w", cachePath, path, err)
@@ -237,7 +237,7 @@ func (m Mounter) writeMetadata(ctx context.Context, result *MountResponse) error
 	metadataPath := filepath.Join(m.CacheRoot, privateNamespaceDir, metadataFilename)
 
 	if !m.DestructiveMode {
-		slog.DebugContext(ctx, "dry-run: would write cache metadata", slog.String("path", metadataPath))
+		slog.Debug("dry-run: would write cache metadata", slog.String("path", metadataPath))
 		return nil
 	}
 
@@ -266,13 +266,13 @@ func (m Mounter) writeMetadata(ctx context.Context, result *MountResponse) error
 	}
 
 	metadataDir := filepath.Dir(metadataPath)
-	slog.DebugContext(ctx, "creating metadata directory", slog.String("path", metadataDir))
+	slog.Debug("creating metadata directory", slog.String("path", metadataDir))
 
 	if err := m.Exec.MkdirAll(metadataDir, 0o755); err != nil {
 		return fmt.Errorf("creating metadata directory: %w", err)
 	}
 
-	slog.DebugContext(ctx, "writing cache metadata", slog.String("path", metadataPath))
+	slog.Debug("writing cache metadata", slog.String("path", metadataPath))
 
 	if err := m.Exec.WriteFile(metadataPath, data, 0o644); err != nil {
 		return fmt.Errorf("writing metadata file: %w", err)
@@ -285,11 +285,11 @@ func (m Mounter) removePath(ctx context.Context, path string, result *MountRespo
 	result.Output.RemovedPaths = append(result.Output.RemovedPaths, path)
 
 	if !m.DestructiveMode {
-		slog.DebugContext(ctx, "dry-run: would remove path", slog.String("path", path))
+		slog.Debug("dry-run: would remove path", slog.String("path", path))
 		return nil
 	}
 
-	slog.DebugContext(ctx, "removing path", slog.String("path", path))
+	slog.Debug("removing path", slog.String("path", path))
 
 	if err := m.Exec.RemoveAll(path); err != nil {
 		return fmt.Errorf("removing %q: %w", path, err)
@@ -319,10 +319,10 @@ func (e DefaultExecutor) Mount(ctx context.Context, from, to string) error {
 		return fmt.Errorf("checking mount path content: %w", err)
 	}
 	if !mountPathEmpty {
-		slog.DebugContext(ctx, "mount path will be overwritten", slog.String("path", to))
+		slog.Debug("mount path will be overwritten", slog.String("path", to))
 	}
 
-	slog.DebugContext(ctx, "mounting path", slog.String("from", from), slog.String("to", to))
+	slog.Debug("mounting path", slog.String("from", from), slog.String("to", to))
 
 	// create cache path, this is noop if it already exists
 	if err := os.MkdirAll(from, 0o755); err != nil {
