@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/namespacelabs/space/internal/cache/mode"
+	"github.com/namespacelabs/spacectl/internal/cache/mode"
 )
 
 func ExampleModes() {

@@ -1,6 +1,6 @@
-# Contributing to Space
+# Contributing to spacectl
 
-Thank you for your interest in contributing to Space!
+Thank you for your interest in contributing to spacectl!
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ This project uses [Nix](https://nixos.org/) to provide a consistent development 
 ## Building
 
 ```bash
-go build -o space .
+go build -o spacectl .
 ```
 
 ## Testing
@@ -31,7 +31,7 @@ Please ensure your code passes linting before submitting a PR.
 
 ## Submitting Changes
 
-Before submitting a pull request, please [open an issue](https://github.com/namespacelabs/space/issues/new) describing the problem you're solving or the feature you'd like to add. This helps us discuss the approach before you invest time in implementation.
+Before submitting a pull request, please [open an issue](https://github.com/namespacelabs/spacectl/issues/new) describing the problem you're solving or the feature you'd like to add. This helps us discuss the approach before you invest time in implementation.
 
 1. Open an issue explaining the problem or feature
 2. Fork the repository

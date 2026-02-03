@@ -10,8 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/namespacelabs/space/internal/cli/cmd"
-	"github.com/namespacelabs/space/internal/log"
+	"github.com/namespacelabs/spacectl/internal/cli/cmd"
+	"github.com/namespacelabs/spacectl/internal/log"
 )
 
 type errorResponse struct {
@@ -29,7 +29,7 @@ var (
 
 func main() {
 	cli := &cobra.Command{
-		Use:   "space",
+		Use:   "spacectl",
 		Short: "CLI used for powering various Namespace functionality",
 		Long:  `A CLI tool for powering various Namespace functionality.`,
 	}

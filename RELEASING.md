@@ -4,7 +4,7 @@ We use [GoReleaser](https://goreleaser.com/) to automate releases. The release w
 
 ## Creating a Release
 
-1. Check existing tags at [github.com/namespacelabs/space/tags](https://github.com/namespacelabs/space/tags)
+1. Check existing tags at [github.com/namespacelabs/spacectl/tags](https://github.com/namespacelabs/spacectl/tags)
 2. Create a new tag with the next semantic version:
    ```bash
    git tag v0.1.0

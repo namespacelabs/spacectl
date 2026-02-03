@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/namespacelabs/space/internal/log"
+	"github.com/namespacelabs/spacectl/internal/log"
 )
 
 func TestGithubHandler_InfoPlainText(t *testing.T) {
