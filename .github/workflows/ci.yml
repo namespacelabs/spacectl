@@ -115,8 +115,8 @@ jobs:
       - name: Switch into Nix Shell
         uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
 
-      - name: Install space from HEAD
-        run: go build -o dist/space .
+      - name: Install spacectl from HEAD
+        run: go build -o dist/spacectl .
 
       - name: Set up Go cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
