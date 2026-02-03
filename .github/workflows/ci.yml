@@ -22,8 +22,7 @@ jobs:
       - name: Set up Nix cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
-          space-enabled: true
-          path: /nix
+          cache: nix
 
       - name: Install Nix
         uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
@@ -38,8 +37,7 @@ jobs:
       - name: Set up cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
-          space-enabled: true
-          mode: |
+          cache: |
             go
             golangci-lint
 
@@ -72,9 +70,8 @@ jobs:
       - name: Set up Nix cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
-          space-enabled: true
           space-version: '${{ matrix.space-version }}'
-          path: /nix
+          cache: nix
 
       - name: Install Nix
         uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
@@ -89,9 +86,8 @@ jobs:
       - name: Set up Go cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
-          space-enabled: true
           space-version: '${{ matrix.space-version }}'
-          mode: go
+          cache: go
 
       - name: Force cache
         run: go mod download
@@ -107,8 +103,7 @@ jobs:
       - name: Set up Nix cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
-          space-enabled: true
-          path: /nix
+          cache: nix
 
       - name: Install Nix
         uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # v31
@@ -126,8 +121,7 @@ jobs:
       - name: Set up Go cache
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
-          space-enabled: true
-          mode: go
+          cache: go
         env:
           NSC_POWERTOYS_DIR: ./dist/ # force binary location
 
