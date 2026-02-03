@@ -15,7 +15,7 @@ jobs:
     runs-on:
       - nscloud-ubuntu-22.04-amd64-4x16-with-cache
       - nscloud-cache-size-20gb
-      - nscloud-cache-tag-space
+      - nscloud-cache-tag-spacectl
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -60,7 +60,7 @@ jobs:
     runs-on:
       - nscloud-ubuntu-22.04-amd64-4x16-with-cache
       - nscloud-cache-size-20gb
-      - nscloud-cache-tag-space
+      - nscloud-cache-tag-spacectl
     strategy:
       matrix:
         space-version: ['', latest]
@@ -96,7 +96,7 @@ jobs:
     runs-on:
       - nscloud-ubuntu-22.04-amd64-4x16-with-cache
       - nscloud-cache-size-20gb
-      - nscloud-cache-tag-space
+      - nscloud-cache-tag-spacectl
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
