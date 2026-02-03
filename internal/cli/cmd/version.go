@@ -13,7 +13,7 @@ import (
 func NewVersionCmd(version, commit, date string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print the version number of the Space CLI",
+		Short: "Print the version number of the Spacectl CLI",
 	}
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
@@ -40,5 +40,5 @@ func outputVersionJSON(w io.Writer, version, commit, date string) error {
 }
 
 func outputVersionText(_ io.Writer, version, commit, date string) {
-	slog.Info(fmt.Sprintf("Space CLI %s (commit: %s, built at: %s)", version, commit, date))
+	slog.Info(fmt.Sprintf("Spacectl CLI %s (commit: %s, built at: %s)", version, commit, date))
 }
