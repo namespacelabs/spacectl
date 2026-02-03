@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/namespacelabs/space/internal/cache/mode"
+	"github.com/namespacelabs/spacectl/internal/cache/mode"
 )
 
 type MountRequest struct {

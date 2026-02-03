@@ -8,7 +8,7 @@
 
 ## Code Style
 - Go 1.25+, use `any` instead of `interface{}`
-- Imports: standard → external → `github.com/namespacelabs/space` (enforced by gci)
+- Imports: standard → external → `github.com/namespacelabs/spacectl` (enforced by gci)
 - Formatting: gofumpt with extra rules enabled
 - Errors: wrap with `fmt.Errorf("context: %w", err)`
 - Logging: use `log/slog` (not log package)

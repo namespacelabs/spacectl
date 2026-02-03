@@ -8,43 +8,43 @@
   <b><i>Namespace</i> is a development-optimized compute platform. It improves the performance and observability of Docker builds, GitHub Actions, and more, without requiring workflow changes. Learn more at https://namespace.so.</b>
 </p>
 
-# 🧑🏻‍🚀 space
+# 🧑🏻‍🚀 spacectl
 
-`space` is a CLI designed to be run on Namespace runners, enabling various integrations.
+`spacectl` is a CLI designed to be run on Namespace runners, enabling various integrations.
 
 ## Installation
 
 ### From Release
 
-Download the latest release from the [releases page](https://github.com/namespacelabs/space/releases).
+Download the latest release from the [releases page](https://github.com/namespacelabs/spacectl/releases).
 
 ### From Source
 
 ```bash
-go install github.com/namespacelabs/space@latest
+go install github.com/namespacelabs/spacectl@latest
 ```
 
 ## Usage
 
 ```bash
 # Display help
-space --help
+spacectl --help
 
 # Show version
-space version
+spacectl version
 ```
 
 **--log-level:**
 
 A global flag to change the log level across all sub commands. Accepts `debug, info, warn, error`.
 
-### `space version`
+### `spacectl version`
 
-Print the version number of the Space CLI.
+Print the version number of the spacectl CLI.
 
 ```bash
-space version
-space version --output json
+spacectl version
+spacectl version --output json
 ```
 
 **Flags:**
@@ -53,13 +53,13 @@ space version --output json
 |------|-------------|
 | `--output, -o` | Output format: `plain` or `json`. Defaults to `plain`. |
 
-### `space cache modes`
+### `spacectl cache modes`
 
 List available cache modes and whether they are detected in the current environment.
 
 ```bash
-space cache modes
-space cache modes -o json
+spacectl cache modes
+spacectl cache modes -o json
 ```
 
 **Flags:**
@@ -68,7 +68,7 @@ space cache modes -o json
 |------|-------------|
 | `--output, -o` | Output format: `plain` or `json`. Defaults to `plain`. |
 
-### `space cache mount`
+### `spacectl cache mount`
 
 Restore cache paths from a Namespace volume.
 
@@ -88,19 +88,19 @@ Restore cache paths from a Namespace volume.
 
 ```bash
 # Detect all available cache modes
-space cache mount --detect='*'
+spacectl cache mount --detect='*'
 
 # Detect only apt caches
-space cache mount --detect=apt
+spacectl cache mount --detect=apt
 
 # Use explicit go cache mode
-space cache mount --mode=go
+spacectl cache mount --mode=go
 
 # Mount a specific path
-space cache mount --path=/some/path
+spacectl cache mount --path=/some/path
 
 # Combine detection with explicit paths
-space cache mount --detect='*' --path=/custom/cache
+spacectl cache mount --detect='*' --path=/custom/cache
 ```
 
 ## Contributing

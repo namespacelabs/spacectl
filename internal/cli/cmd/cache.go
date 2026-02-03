@@ -12,8 +12,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/namespacelabs/space/internal/cache"
-	"github.com/namespacelabs/space/internal/cache/mode"
+	"github.com/namespacelabs/spacectl/internal/cache"
+	"github.com/namespacelabs/spacectl/internal/cache/mode"
 )
 
 const defaultCacheRootEnv = "NSC_CACHE_PATH"

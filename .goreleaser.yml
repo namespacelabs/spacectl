@@ -16,7 +16,7 @@ builds:
       - -X main.Commit={{.ShortCommit}}
       - -X main.Date={{.Date}}
     main: ./main.go
-    binary: space
+    binary: spacectl
 
 archives:
   - id: default
@@ -40,7 +40,7 @@ changelog:
 release:
   github:
     owner: namespacelabs
-    name: space
+    name: spacectl
   prerelease: auto
 
 snapshot:

@@ -1,4 +1,4 @@
-module github.com/namespacelabs/space
+module github.com/namespacelabs/spacectl
 
 go 1.25.5
 

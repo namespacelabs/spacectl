@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/namespacelabs/space/internal/log"
+	"github.com/namespacelabs/spacectl/internal/log"
 )
 
 func TestPlainHandler_MessageOnly(t *testing.T) {
