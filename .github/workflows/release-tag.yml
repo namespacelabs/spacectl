@@ -46,7 +46,7 @@ jobs:
         uses: namespacelabs/nscloud-cache-action@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
         with:
           space-enabled: true
-          mode: go
+          cache: go
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
