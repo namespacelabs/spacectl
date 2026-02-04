@@ -15,9 +15,9 @@ on:
 
 jobs:
   modes:
-    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@a4cc4697b9de3b562bec5a856e6f3c31f94506e2 # v1.3.0
+    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@7c5c353ae24ad938e63525b4218debfa8050ac09
     with:
-      space-source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      spacectl-source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
   # Single check for branch protection after all mode tests complete
   modes-ok:
