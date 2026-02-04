@@ -1,0 +1,34 @@
+# Tests the nscloud-cache-action against all cache modes using the current spacectl binary.
+# This ensures changes to spacectl don't break any cache mode integrations.
+
+name: Cache action
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  modes:
+    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@7c5c353ae24ad938e63525b4218debfa8050ac09
+    with:
+      spacectl-source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  # Single check for branch protection after all mode tests complete
+  modes-ok:
+    needs: modes
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check mode tests passed
+        run: |
+          if [[ "${{ needs.modes.result }}" != "success" ]]; then
+            echo "Mode tests failed with result: ${{ needs.modes.result }}"
+            exit 1
+          fi
+          echo "All mode tests passed"
