@@ -1,0 +1,48 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXGroup section */
+		00000000000000000000001 /* = */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXProject section */
+		00000000000000000000002 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 00000000000000000000004;
+			compatibilityVersion = "Xcode 14.0";
+			mainGroup = 00000000000000000000001;
+		};
+/* End PBXProject section */
+
+/* Begin XCBuildConfiguration section */
+		00000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		00000000000000000000004 /* Build configuration list for PBXProject */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				00000000000000000000003 /* Debug */,
+			);
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 00000000000000000000002 /* Project object */;
+}

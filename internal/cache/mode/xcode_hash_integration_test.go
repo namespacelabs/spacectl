@@ -1,8 +1,7 @@
 package mode
 
 import (
-	"bufio"
-	"bytes"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,104 +10,32 @@ import (
 )
 
 // TestXcodeDerivedDataHash_Integration validates our hash implementation against
-// the real xcodebuild -showBuildSettings output. It requires macOS with Xcode
-// installed and a directory containing a .xcodeproj or .xcworkspace.
+// the actual DerivedData directory that Xcode creates. It requires macOS with
+// Xcode installed.
 //
-// Run with: NSC_TEST_XCODE_HASH=/path/to/project go test -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/
+// Run with: NSC_TEST_XCODE_HASH=1 go test -v -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/
 func TestXcodeDerivedDataHash_Integration(t *testing.T) {
-	projectDir := os.Getenv("NSC_TEST_XCODE_HASH")
-	if projectDir == "" {
-		t.Skip("set NSC_TEST_XCODE_HASH=/path/to/xcode/project to run this integration test")
+	if os.Getenv("NSC_TEST_XCODE_HASH") == "" {
+		t.Skip("set NSC_TEST_XCODE_HASH=1 to run this integration test")
 	}
 
-	// Find .xcworkspace or .xcodeproj in the project directory.
-	entries, err := os.ReadDir(projectDir)
-	if err != nil {
-		t.Fatalf("readdir: %v", err)
-	}
+	// Copy the minimal fixture to a temp dir so the absolute path is unique.
+	tmpDir := t.TempDir()
+	copyDir(t, "testdata/TestApp.xcodeproj", filepath.Join(tmpDir, "TestApp.xcodeproj"))
 
-	var projectFile string
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), xcodeWorkspaceSuffix) {
-			projectFile = entry.Name()
-			break
-		}
-	}
-	if projectFile == "" {
-		for _, entry := range entries {
-			if strings.HasSuffix(entry.Name(), xcodeProjSuffix) {
-				projectFile = entry.Name()
-				break
-			}
-		}
-	}
-	if projectFile == "" {
-		t.Fatal("no .xcodeproj or .xcworkspace found in current directory")
-	}
+	projectFile := "TestApp.xcodeproj"
+	absPath := filepath.Join(tmpDir, projectFile)
 
-	// Compute expected hash from our algorithm.
-	absPath, err := filepath.Abs(filepath.Join(projectDir, projectFile))
-	if err != nil {
-		t.Fatalf("filepath.Abs: %v", err)
-	}
-	name := strings.TrimSuffix(strings.TrimSuffix(projectFile, xcodeWorkspaceSuffix), xcodeProjSuffix)
+	name := strings.TrimSuffix(projectFile, xcodeProjSuffix)
 	computedHash := xcodeDerivedDataHash(absPath)
 	computedSubfolder := name + "-" + computedHash
 
-	// Get actual BUILD_DIR from xcodebuild.
-	projectPath := filepath.Join(projectDir, projectFile)
-	var args []string
-	if strings.HasSuffix(projectFile, xcodeWorkspaceSuffix) {
-		// Discover a scheme first.
-		listCmd := exec.Command("xcodebuild", "-list", "-workspace", projectPath)
-		listOutput, err := listCmd.Output()
-		if err != nil {
-			t.Fatalf("xcodebuild -list: %v", err)
-		}
-		scheme := parseFirstScheme(listOutput)
-		if scheme == "" {
-			t.Fatal("no scheme found in xcodebuild -list output")
-		}
-		args = []string{"-showBuildSettings", "-workspace", projectPath, "-scheme", scheme}
-	} else {
-		args = []string{"-showBuildSettings", "-project", projectPath}
-	}
+	// Run xcodebuild to trigger DerivedData directory creation.
+	runXcodebuild(t, tmpDir, projectFile)
 
-	cmd := exec.Command("xcodebuild", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("xcodebuild -showBuildSettings: %v", err)
-	}
+	// Scan ~/Library/Developer/Xcode/DerivedData/ for the actual subfolder.
+	actualSubfolder := findDerivedDataSubfolder(t, name)
 
-	// Parse BUILD_DIR to extract the DerivedData subfolder.
-	var buildDir string
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		key, value, ok := strings.Cut(line, " = ")
-		if ok && strings.TrimSpace(key) == "BUILD_DIR" {
-			buildDir = strings.TrimSpace(value)
-			break
-		}
-	}
-	if buildDir == "" {
-		t.Fatal("BUILD_DIR not found in xcodebuild -showBuildSettings output")
-	}
-
-	// Extract the subfolder: .../DerivedData/<subfolder>/Build/Products
-	parts := strings.Split(buildDir, "/")
-	var actualSubfolder string
-	for i, p := range parts {
-		if p == "DerivedData" && i+1 < len(parts) {
-			actualSubfolder = parts[i+1]
-			break
-		}
-	}
-	if actualSubfolder == "" {
-		t.Fatalf("could not extract DerivedData subfolder from BUILD_DIR: %s", buildDir)
-	}
-
-	t.Logf("Project file:       %s", projectFile)
 	t.Logf("Absolute path:      %s", absPath)
 	t.Logf("Computed subfolder: %s", computedSubfolder)
 	t.Logf("Actual subfolder:   %s", actualSubfolder)
@@ -118,18 +45,67 @@ func TestXcodeDerivedDataHash_Integration(t *testing.T) {
 	}
 }
 
-func parseFirstScheme(output []byte) string {
-	var inSchemes bool
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "Schemes:" {
-			inSchemes = true
-			continue
-		}
-		if inSchemes && line != "" {
-			return line
+func runXcodebuild(t *testing.T, dir, projectFile string) {
+	t.Helper()
+
+	projectPath := filepath.Join(dir, projectFile)
+
+	// We only need xcodebuild to register the project in DerivedData.
+	// -showBuildSettings is the lightest operation.
+	args := []string{"-showBuildSettings", "-project", projectPath}
+
+	cmd := exec.Command("xcodebuild", args...)
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("xcodebuild -showBuildSettings: %v", err)
+	}
+}
+
+func findDerivedDataSubfolder(t *testing.T, projectName string) string {
+	t.Helper()
+
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("user home dir: %v", err)
+	}
+	ddDir := filepath.Join(homeDir, "Library", "Developer", "Xcode", "DerivedData")
+	entries, err := os.ReadDir(ddDir)
+	if err != nil {
+		t.Fatalf("readdir %s: %v", ddDir, err)
+	}
+
+	prefix := projectName + "-"
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), prefix) && entry.IsDir() {
+			return entry.Name()
 		}
 	}
+
+	t.Fatalf("no DerivedData subfolder found for project %q in %s", projectName, ddDir)
 	return ""
+}
+
+func copyDir(t *testing.T, src, dst string) {
+	t.Helper()
+
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+	if err != nil {
+		t.Fatalf("copy %s -> %s: %v", src, dst, err)
+	}
 }
