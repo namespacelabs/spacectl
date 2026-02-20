@@ -21,7 +21,7 @@ func TestXcodeDerivedDataHash_Integration(t *testing.T) {
 
 	// Copy the minimal fixture to a temp dir so the absolute path is unique.
 	tmpDir := t.TempDir()
-	copyDir(t, "testdata/TestApp.xcodeproj", filepath.Join(tmpDir, "TestApp.xcodeproj"))
+	copyDir(t, "testdata", tmpDir)
 
 	projectFile := "TestApp.xcodeproj"
 	absPath := filepath.Join(tmpDir, projectFile)
@@ -55,8 +55,9 @@ func runXcodebuild(t *testing.T, dir, projectFile string) {
 	args := []string{"-showBuildSettings", "-project", projectPath}
 
 	cmd := exec.Command("xcodebuild", args...)
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("xcodebuild -showBuildSettings: %v", err)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("xcodebuild -showBuildSettings: %v\n%s", err, output)
 	}
 }
 
