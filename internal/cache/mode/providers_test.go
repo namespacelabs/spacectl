@@ -1990,7 +1990,7 @@ func TestXcodeProvider_Plan(t *testing.T) {
 		origDir, err := os.Getwd()
 		require.NoError(t, err)
 		require.NoError(t, os.Chdir(tmpDir))
-		t.Cleanup(func() { os.Chdir(origDir) })
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
 
 		p := mode.XcodeProvider{}
 		result, err := p.Plan(t.Context(), req)
@@ -2018,7 +2018,7 @@ func TestXcodeProvider_Plan(t *testing.T) {
 		origDir, err := os.Getwd()
 		require.NoError(t, err)
 		require.NoError(t, os.Chdir(tmpDir))
-		t.Cleanup(func() { os.Chdir(origDir) })
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
 
 		p := mode.XcodeProvider{}
 		result, err := p.Plan(t.Context(), req)
