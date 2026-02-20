@@ -1,0 +1,35 @@
+name: Validate Xcode DerivedData hash
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # Weekly on Monday at 06:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  validate-hash:
+    name: Validate hash against xcodebuild
+    runs-on:
+      - nscloud-macos-arm64
+    steps:
+      - name: Checkout spacectl
+        uses: actions/checkout@v4
+
+      - name: Checkout ios-demo
+        uses: actions/checkout@v4
+        with:
+          repository: nscloud-demo/ios-demo
+          path: ios-demo
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Validate Xcode DerivedData hash
+        working-directory: ios-demo
+        env:
+          NSC_TEST_XCODE_HASH: "1"
+        run: go test -v -run TestXcodeDerivedDataHash_Integration ../internal/cache/mode/
