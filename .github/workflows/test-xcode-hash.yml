@@ -30,7 +30,6 @@ jobs:
           go-version-file: go.mod
 
       - name: Validate Xcode DerivedData hash
-        working-directory: ios-demo
         env:
-          NSC_TEST_XCODE_HASH: "1"
-        run: go test -v -run TestXcodeDerivedDataHash_Integration ../internal/cache/mode/
+          NSC_TEST_XCODE_HASH: ${{ github.workspace }}/ios-demo
+        run: go test -v -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/

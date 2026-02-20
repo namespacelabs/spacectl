@@ -12,16 +12,17 @@ import (
 
 // TestXcodeDerivedDataHash_Integration validates our hash implementation against
 // the real xcodebuild -showBuildSettings output. It requires macOS with Xcode
-// installed and a .xcodeproj or .xcworkspace in the current directory.
+// installed and a directory containing a .xcodeproj or .xcworkspace.
 //
-// Run with: NSC_TEST_XCODE_HASH=1 go test -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/
+// Run with: NSC_TEST_XCODE_HASH=/path/to/project go test -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/
 func TestXcodeDerivedDataHash_Integration(t *testing.T) {
-	if os.Getenv("NSC_TEST_XCODE_HASH") == "" {
-		t.Skip("set NSC_TEST_XCODE_HASH=1 to run this integration test")
+	projectDir := os.Getenv("NSC_TEST_XCODE_HASH")
+	if projectDir == "" {
+		t.Skip("set NSC_TEST_XCODE_HASH=/path/to/xcode/project to run this integration test")
 	}
 
-	// Find .xcworkspace or .xcodeproj in the current directory.
-	entries, err := os.ReadDir(".")
+	// Find .xcworkspace or .xcodeproj in the project directory.
+	entries, err := os.ReadDir(projectDir)
 	if err != nil {
 		t.Fatalf("readdir: %v", err)
 	}
@@ -46,7 +47,7 @@ func TestXcodeDerivedDataHash_Integration(t *testing.T) {
 	}
 
 	// Compute expected hash from our algorithm.
-	absPath, err := filepath.Abs(projectFile)
+	absPath, err := filepath.Abs(filepath.Join(projectDir, projectFile))
 	if err != nil {
 		t.Fatalf("filepath.Abs: %v", err)
 	}
@@ -55,10 +56,11 @@ func TestXcodeDerivedDataHash_Integration(t *testing.T) {
 	computedSubfolder := name + "-" + computedHash
 
 	// Get actual BUILD_DIR from xcodebuild.
+	projectPath := filepath.Join(projectDir, projectFile)
 	var args []string
 	if strings.HasSuffix(projectFile, xcodeWorkspaceSuffix) {
 		// Discover a scheme first.
-		listCmd := exec.Command("xcodebuild", "-list", "-workspace", projectFile)
+		listCmd := exec.Command("xcodebuild", "-list", "-workspace", projectPath)
 		listOutput, err := listCmd.Output()
 		if err != nil {
 			t.Fatalf("xcodebuild -list: %v", err)
@@ -67,9 +69,9 @@ func TestXcodeDerivedDataHash_Integration(t *testing.T) {
 		if scheme == "" {
 			t.Fatal("no scheme found in xcodebuild -list output")
 		}
-		args = []string{"-showBuildSettings", "-workspace", projectFile, "-scheme", scheme}
+		args = []string{"-showBuildSettings", "-workspace", projectPath, "-scheme", scheme}
 	} else {
-		args = []string{"-showBuildSettings", "-project", projectFile}
+		args = []string{"-showBuildSettings", "-project", projectPath}
 	}
 
 	cmd := exec.Command("xcodebuild", args...)
