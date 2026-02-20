@@ -1,6 +1,12 @@
 name: Validate Xcode DerivedData hash
 
 on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1" # Weekly on Monday at 06:00 UTC
@@ -12,7 +18,7 @@ jobs:
   validate-hash:
     name: Validate hash against xcodebuild
     runs-on:
-      - nscloud-macos-arm64
+      - nscloud-macos-tahoe-arm64-12x28
     steps:
       - uses: actions/checkout@v4
 
