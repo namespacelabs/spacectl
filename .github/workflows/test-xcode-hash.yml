@@ -2,6 +2,7 @@ name: Validate Xcode DerivedData hash
 
 on:
   workflow_dispatch:
+  push:
   schedule:
     - cron: "0 6 * * 1" # Weekly on Monday at 06:00 UTC
 
