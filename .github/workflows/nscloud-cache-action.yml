@@ -15,7 +15,7 @@ on:
 
 jobs:
   modes:
-    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@7c5c353ae24ad938e63525b4218debfa8050ac09
+    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@4d61c33d0b4333a518e975a0c4de7633d28713bb
     with:
       spacectl-source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
