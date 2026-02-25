@@ -1021,6 +1021,109 @@ func TestMount(t *testing.T) {
 		require.ErrorContains(t, err, "mount failed")
 	})
 
+	t.Run("mount with glob paths", func(t *testing.T) {
+		cacheRoot := t.TempDir()
+
+		exec := &cache.ExecutorMock{
+			GlobFunc: func(pattern string) ([]string, error) {
+				return []string{"/tmp/cache-a", "/tmp/cache-b"}, nil
+			},
+			MountFunc:     func(ctx context.Context, from, to string) error { return nil },
+			StatFunc:      func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+			MkdirAllFunc:  func(path string, perm os.FileMode) error { return nil },
+			WriteFileFunc: func(name string, data []byte, perm os.FileMode) error { return nil },
+			DiskUsageFunc: func(ctx context.Context, path string) (cache.DiskUsage, error) {
+				return cache.DiskUsage{}, fmt.Errorf("not implemented")
+			},
+		}
+
+		m := cache.Mounter{
+			DestructiveMode: true,
+			CacheRoot:       cacheRoot,
+			Exec:            exec,
+			Modes:           mode.Modes{},
+		}
+
+		result, err := m.Mount(t.Context(), cache.MountRequest{
+			GlobPaths: []string{"/tmp/cache-*"},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, []string{"/tmp/cache-*"}, result.Input.GlobPaths)
+		require.Empty(t, result.Input.Paths)
+		mountCalls := exec.MountCalls()
+		require.Len(t, mountCalls, 2)
+
+		mountedPaths := []string{mountCalls[0].To, mountCalls[1].To}
+		require.ElementsMatch(t, []string{"/tmp/cache-a", "/tmp/cache-b"}, mountedPaths)
+	})
+
+	t.Run("mount with glob paths - no matches", func(t *testing.T) {
+		cacheRoot := t.TempDir()
+
+		exec := &cache.ExecutorMock{
+			GlobFunc: func(pattern string) ([]string, error) {
+				return nil, nil
+			},
+			DiskUsageFunc: func(ctx context.Context, path string) (cache.DiskUsage, error) {
+				return cache.DiskUsage{}, fmt.Errorf("not implemented")
+			},
+		}
+
+		m := cache.Mounter{
+			DestructiveMode: true,
+			CacheRoot:       cacheRoot,
+			Exec:            exec,
+			Modes:           mode.Modes{},
+		}
+
+		result, err := m.Mount(t.Context(), cache.MountRequest{
+			GlobPaths: []string{"/tmp/nonexistent-*"},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, []string{"/tmp/nonexistent-*"}, result.Input.GlobPaths)
+		require.Empty(t, result.Output.Mounts)
+	})
+
+	t.Run("manual paths treat glob characters literally", func(t *testing.T) {
+		cacheRoot := t.TempDir()
+		baseDir := t.TempDir()
+
+		// Create directories matching the glob pattern
+		require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "cache-a"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(baseDir, "cache-b"), 0o755))
+
+		exec := &cache.ExecutorMock{
+			MountFunc:     func(ctx context.Context, from, to string) error { return nil },
+			StatFunc:      func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+			MkdirAllFunc:  func(path string, perm os.FileMode) error { return nil },
+			WriteFileFunc: func(name string, data []byte, perm os.FileMode) error { return nil },
+			DiskUsageFunc: func(ctx context.Context, path string) (cache.DiskUsage, error) {
+				return cache.DiskUsage{}, fmt.Errorf("not implemented")
+			},
+		}
+
+		m := cache.Mounter{
+			DestructiveMode: true,
+			CacheRoot:       cacheRoot,
+			Exec:            exec,
+			Modes:           mode.Modes{},
+		}
+
+		globPattern := filepath.Join(baseDir, "cache-*")
+		result, err := m.Mount(t.Context(), cache.MountRequest{
+			ManualPaths: []string{globPattern},
+		})
+		require.NoError(t, err)
+
+		// Path is treated literally, not expanded
+		mountCalls := exec.MountCalls()
+		require.Len(t, mountCalls, 1)
+		require.Equal(t, globPattern, mountCalls[0].To)
+		require.Len(t, result.Output.Mounts, 1)
+	})
+
 	t.Run("tilde path expansion", func(t *testing.T) {
 		homeDir, err := os.UserHomeDir()
 		require.NoError(t, err)

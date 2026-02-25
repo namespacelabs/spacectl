@@ -20,12 +20,13 @@ type MountRequest struct {
 	DetectModes    []string
 	ManualModes    []string
 	ManualPaths    []string
+	GlobPaths      []string
 }
 
 // EnabledModes returns the set of enabled cache modes based on the request.
 // It performs detection as necessary, based on the detect modes specified.
 func (req MountRequest) EnabledModes(ctx context.Context, available mode.Modes) (mode.Modes, error) {
-	if !req.DetectAllModes && len(req.DetectModes) == 0 && len(req.ManualModes) == 0 && len(req.ManualPaths) == 0 {
+	if !req.DetectAllModes && len(req.DetectModes) == 0 && len(req.ManualModes) == 0 && len(req.ManualPaths) == 0 && len(req.GlobPaths) == 0 {
 		return nil, errors.New("at least one cache mode or path must be specified")
 	}
 
@@ -59,8 +60,9 @@ type MountResponse struct {
 }
 
 type MountResponseInput struct {
-	Modes []string `json:"modes,omitzero"`
-	Paths []string `json:"paths,omitzero"`
+	Modes     []string `json:"modes,omitzero"`
+	Paths     []string `json:"paths,omitzero"`
+	GlobPaths []string `json:"glob_paths,omitzero"`
 }
 
 type MountResponseOutput struct {
@@ -132,6 +134,11 @@ func (m Mounter) Mount(ctx context.Context, req MountRequest) (MountResponse, er
 		return MountResponse{}, err
 	}
 
+	// Mount glob paths
+	if err := m.mountGlobs(ctx, req.GlobPaths, &result); err != nil {
+		return MountResponse{}, err
+	}
+
 	// Get disk usage (allowed to fail)
 	if usage, err := m.Exec.DiskUsage(ctx, m.CacheRoot); err == nil {
 		result.Output.DiskUsage = &usage
@@ -187,6 +194,36 @@ func (m Mounter) mountPaths(ctx context.Context, paths []string, result *MountRe
 	return nil
 }
 
+func (m Mounter) mountGlobs(ctx context.Context, patterns []string, result *MountResponse) error {
+	result.Input.GlobPaths = append(result.Input.GlobPaths, patterns...)
+
+	var expandedPaths []string
+	for _, pattern := range patterns {
+		if strings.Contains(pattern, "**") {
+			slog.Warn("glob pattern contains ** which is not supported; ** is treated the same as *", slog.String("pattern", pattern))
+		}
+
+		paths, err := m.resolveGlob(pattern)
+		if err != nil {
+			return err
+		}
+
+		slog.Debug("expanded glob pattern", slog.String("pattern", pattern), slog.Any("paths", paths))
+		slog.Info(fmt.Sprintf("glob pattern %s expanded to %d paths", pattern, len(paths)))
+
+		expandedPaths = append(expandedPaths, paths...)
+	}
+
+	for _, path := range expandedPaths {
+		mount, err := m.mountPath(ctx, "", path)
+		if err != nil {
+			return fmt.Errorf("mounting glob path %q: %w", path, err)
+		}
+		result.Output.Mounts = append(result.Output.Mounts, mount)
+	}
+	return nil
+}
+
 func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountResult, error) {
 	path, err := resolveHome(path)
 	if err != nil {
@@ -221,7 +258,7 @@ func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountRes
 	return mount, nil
 }
 
-func (m Mounter) removePath(ctx context.Context, path string, result *MountResponse) error {
+func (m Mounter) removePath(_ context.Context, path string, result *MountResponse) error {
 	result.Output.RemovedPaths = append(result.Output.RemovedPaths, path)
 
 	if !m.DestructiveMode {
@@ -239,6 +276,7 @@ func (m Mounter) removePath(ctx context.Context, path string, result *MountRespo
 
 type Executor interface {
 	DiskUsage(ctx context.Context, path string) (DiskUsage, error)
+	Glob(pattern string) ([]string, error)
 	MkdirAll(path string, perm os.FileMode) error
 	Mount(ctx context.Context, from, to string) error
 	RemoveAll(name string) error
@@ -271,6 +309,10 @@ func (e DefaultExecutor) Mount(ctx context.Context, from, to string) error {
 
 	// os specific mount logic
 	return mount(ctx, from, to)
+}
+
+func (e DefaultExecutor) Glob(pattern string) ([]string, error) {
+	return filepath.Glob(pattern)
 }
 
 func (e DefaultExecutor) RemoveAll(name string) error {
@@ -450,6 +492,22 @@ func sudoMkdirP(ctx context.Context, path string) error {
 	}
 
 	return nil
+}
+
+// resolveGlob expands a single glob pattern into matching paths.
+// The pattern is first resolved for home directory (~) before globbing.
+func (m Mounter) resolveGlob(pattern string) ([]string, error) {
+	resolved, err := resolveHome(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("resolving home in glob %q: %w", pattern, err)
+	}
+
+	matches, err := m.Exec.Glob(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("expanding glob %q: %w", pattern, err)
+	}
+
+	return matches, nil
 }
 
 // resolveHome expands a leading ~ in the path to the user's home directory.
