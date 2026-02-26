@@ -172,7 +172,7 @@ func (m Mounter) mountModes(ctx context.Context, modes mode.Modes, result *Mount
 		}
 
 		for _, path := range p.RemovePaths {
-			if err := m.removePath(ctx, path, result); err != nil {
+			if err := m.removePath(path, result); err != nil {
 				return fmt.Errorf("removing mode path %q: %w", path, err)
 			}
 		}
@@ -258,7 +258,7 @@ func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountRes
 	return mount, nil
 }
 
-func (m Mounter) removePath(_ context.Context, path string, result *MountResponse) error {
+func (m Mounter) removePath(path string, result *MountResponse) error {
 	result.Output.RemovedPaths = append(result.Output.RemovedPaths, path)
 
 	if !m.DestructiveMode {
