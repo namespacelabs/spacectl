@@ -65,8 +65,8 @@ func newCacheMountCmd() *cobra.Command {
 	cacheRoot := cmd.Flags().String("cache_root", os.Getenv(defaultCacheRootEnv), "Override the root path where cache volumes are mounted.")
 	detectModes := cmd.Flags().StringSlice("detect", []string{}, "Detects cache mode(s) based on environment. Supply '*' to enable all detectors.")
 	manualModes := cmd.Flags().StringSlice("mode", []string{}, "Explicit cache mode(s) to enable.")
-	manualPaths := cmd.Flags().StringSlice("path", []string{}, "Explicit cache path(s) to enable.")
-	globPaths := cmd.Flags().StringSlice("glob", []string{}, "Glob pattern(s) to expand and mount. Supports *, ?, and [charset] wildcards. Does not support ** (recursive).")
+	manualPaths := cmd.Flags().StringArray("path", []string{}, "Explicit cache path(s) to enable.")
+	globPaths := cmd.Flags().StringArray("glob", []string{}, "Glob pattern(s) to expand and mount. Supports *, ?, and [charset] wildcards. Does not support ** (recursive).")
 	evalFile := cmd.Flags().String("eval_file", "", "Write a file that can be sourced to export environment variables.")
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
