@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1048,9 +1050,10 @@ func (p UVProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, erro
 const (
 	xcodeCompilationCacheKey   = "COMPILATION_CACHE_ENABLE_CACHING_DEFAULT"
 	xcodeCompilationCacheValue = "YES"
-	// Consider: `defaults read com.apple.dt.Xcode.plist IDECustomDerivedDataLocation`
-	xcodeCachePath  = "~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex"
-	xcodeProjSuffix = ".xcodeproj"
+	xcodeDerivedDataDir        = "~/Library/Developer/Xcode/DerivedData"
+	xcodeCachePath             = xcodeDerivedDataDir + "/CompilationCache.noindex"
+	xcodeProjSuffix            = ".xcodeproj"
+	xcodeWorkspaceSuffix       = ".xcworkspace"
 )
 
 type XcodeProvider struct{}
@@ -1073,7 +1076,7 @@ func (p XcodeProvider) Detect(ctx context.Context, req DetectRequest) (bool, err
 	}
 
 	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), xcodeProjSuffix) {
+		if strings.HasSuffix(entry.Name(), xcodeProjSuffix) || strings.HasSuffix(entry.Name(), xcodeWorkspaceSuffix) {
 			return true, nil
 		}
 	}
@@ -1083,12 +1086,95 @@ func (p XcodeProvider) Detect(ctx context.Context, req DetectRequest) (bool, err
 
 // Experimental: Xcode compilation cache can be huge.
 func (p XcodeProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
+	mountPaths := []string{xcodeCachePath}
+
+	// When a custom -derivedDataPath is used (e.g. by Fastlane), Xcode stores
+	// CompilationCache.noindex inside the project-specific DerivedData directory
+	// rather than the global location. Also mount that path so caching works
+	// regardless of whether -derivedDataPath is used.
+	if projectCachePath := xcodeProjectCachePath(req.Exec); projectCachePath != "" {
+		mountPaths = append(mountPaths, projectCachePath)
+	}
+
 	return PlanResult{
 		AddEnvs: map[string]string{
 			xcodeCompilationCacheKey: xcodeCompilationCacheValue,
 		},
-		MountPaths: []string{xcodeCachePath},
+		MountPaths: mountPaths,
 	}, nil
+}
+
+// xcodeProjectCachePath computes the project-specific DerivedData path where
+// Xcode would store CompilationCache.noindex when -derivedDataPath is used.
+//
+// Xcode computes a deterministic 28-character hash from the absolute path of
+// the .xcworkspace or .xcodeproj file. The DerivedData folder is named
+// "<ProjectName>-<hash>". We replicate this algorithm to predict the path
+// without invoking xcodebuild (which would trigger slow SPM dependency
+// resolution). This hash algorithm has been stable since Xcode 4 and is also
+// relied upon by Fastlane, xcode-build-server, and other tools.
+//
+// Validated by CI: see .github/workflows/test-xcode-hash.yml.
+func xcodeProjectCachePath(executor Executor) string {
+	entries, err := executor.ReadDir(".")
+	if err != nil {
+		return ""
+	}
+
+	// Prefer .xcworkspace over .xcodeproj (matches Xcode/Fastlane behavior).
+	var projectFile string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), xcodeWorkspaceSuffix) {
+			projectFile = entry.Name()
+			break
+		}
+	}
+	if projectFile == "" {
+		for _, entry := range entries {
+			if strings.HasSuffix(entry.Name(), xcodeProjSuffix) {
+				projectFile = entry.Name()
+				break
+			}
+		}
+	}
+	if projectFile == "" {
+		return ""
+	}
+
+	absPath, err := filepath.Abs(projectFile)
+	if err != nil {
+		return ""
+	}
+
+	name := strings.TrimSuffix(strings.TrimSuffix(projectFile, xcodeWorkspaceSuffix), xcodeProjSuffix)
+	hash := xcodeDerivedDataHash(absPath)
+
+	return xcodeDerivedDataDir + "/" + name + "-" + hash + "/CompilationCache.noindex"
+}
+
+// xcodeDerivedDataHash replicates Xcode's hashStringForPath algorithm.
+// It computes an MD5 of the path, then encodes each 8-byte half of the
+// digest as a 14-character base-26 string (a-z), producing a 28-character identifier.
+func xcodeDerivedDataHash(path string) string {
+	digest := md5.Sum([]byte(path)) //nolint:gosec // Replicating Xcode's algorithm, not used for security.
+
+	var result [28]byte
+
+	// First half: bytes 0-7, big-endian uint64, encoded into positions 0-13.
+	startValue := binary.BigEndian.Uint64(digest[0:8])
+	for i := 13; i >= 0; i-- {
+		result[i] = byte(startValue%26) + 'a'
+		startValue /= 26
+	}
+
+	// Second half: bytes 8-15, big-endian uint64, encoded into positions 14-27.
+	startValue = binary.BigEndian.Uint64(digest[8:16])
+	for i := 27; i >= 14; i-- {
+		result[i] = byte(startValue%26) + 'a'
+		startValue /= 26
+	}
+
+	return string(result[:])
 }
 
 // YarnProvider

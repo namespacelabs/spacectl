@@ -1915,6 +1915,26 @@ func TestXcodeProvider_Detect(t *testing.T) {
 		require.True(t, detected)
 	})
 
+	t.Run("detected when binary and .xcworkspace exist", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/bin/xcodebuild", nil
+				},
+				ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+					return []os.DirEntry{
+						mockDirEntry{name: "MyApp.xcworkspace", isDir: true},
+					}, nil
+				},
+			},
+		}
+
+		p := mode.XcodeProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.True(t, detected)
+	})
+
 	t.Run("not detected when binary missing", func(t *testing.T) {
 		req := mode.DetectRequest{
 			Exec: &mode.ExecutorMock{
@@ -1953,16 +1973,76 @@ func TestXcodeProvider_Detect(t *testing.T) {
 }
 
 func TestXcodeProvider_Plan(t *testing.T) {
-	t.Run("returns cache path and env", func(t *testing.T) {
+	t.Run("returns global and project-specific cache paths for xcodeproj", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		projDir := filepath.Join(tmpDir, "MyApp.xcodeproj")
+		require.NoError(t, os.MkdirAll(projDir, 0o755))
+
 		req := mode.PlanRequest{
-			Exec: &mode.ExecutorMock{},
+			Exec: &mode.ExecutorMock{
+				ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+					return os.ReadDir(tmpDir)
+				},
+			},
+		}
+
+		// Change to tmpDir so filepath.Abs resolves correctly.
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+		p := mode.XcodeProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Len(t, result.MountPaths, 2)
+		require.Equal(t, "~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex", result.MountPaths[0])
+		require.Contains(t, result.MountPaths[1], "~/Library/Developer/Xcode/DerivedData/MyApp-")
+		require.Contains(t, result.MountPaths[1], "/CompilationCache.noindex")
+		require.Equal(t, map[string]string{"COMPILATION_CACHE_ENABLE_CACHING_DEFAULT": "YES"}, result.AddEnvs)
+	})
+
+	t.Run("prefers xcworkspace over xcodeproj", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "MyApp.xcodeproj"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, "MyApp.xcworkspace"), 0o755))
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+					return os.ReadDir(tmpDir)
+				},
+			},
+		}
+
+		origDir, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(tmpDir))
+		t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+		p := mode.XcodeProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Len(t, result.MountPaths, 2)
+		// Hash should be based on .xcworkspace path, not .xcodeproj.
+		require.Contains(t, result.MountPaths[1], "~/Library/Developer/Xcode/DerivedData/MyApp-")
+	})
+
+	t.Run("returns only global path when no project files found", func(t *testing.T) {
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				ReadDirFunc: func(name string) ([]os.DirEntry, error) {
+					return []os.DirEntry{
+						mockDirEntry{name: "README.md", isDir: false},
+					}, nil
+				},
+			},
 		}
 
 		p := mode.XcodeProvider{}
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
 		require.Equal(t, []string{"~/Library/Developer/Xcode/DerivedData/CompilationCache.noindex"}, result.MountPaths)
-		require.Equal(t, map[string]string{"COMPILATION_CACHE_ENABLE_CACHING_DEFAULT": "YES"}, result.AddEnvs)
 	})
 }
 
