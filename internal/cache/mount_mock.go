@@ -22,9 +22,6 @@ var _ Executor = &ExecutorMock{}
 //			DiskUsageFunc: func(ctx context.Context, path string) (DiskUsage, error) {
 //				panic("mock out the DiskUsage method")
 //			},
-//			GlobFunc: func(pattern string) ([]string, error) {
-//				panic("mock out the Glob method")
-//			},
 //			MkdirAllFunc: func(path string, perm os.FileMode) error {
 //				panic("mock out the MkdirAll method")
 //			},
@@ -50,9 +47,6 @@ type ExecutorMock struct {
 	// DiskUsageFunc mocks the DiskUsage method.
 	DiskUsageFunc func(ctx context.Context, path string) (DiskUsage, error)
 
-	// GlobFunc mocks the Glob method.
-	GlobFunc func(pattern string) ([]string, error)
-
 	// MkdirAllFunc mocks the MkdirAll method.
 	MkdirAllFunc func(path string, perm os.FileMode) error
 
@@ -76,11 +70,6 @@ type ExecutorMock struct {
 			Ctx context.Context
 			// Path is the path argument value.
 			Path string
-		}
-		// Glob holds details about calls to the Glob method.
-		Glob []struct {
-			// Pattern is the pattern argument value.
-			Pattern string
 		}
 		// MkdirAll holds details about calls to the MkdirAll method.
 		MkdirAll []struct {
@@ -119,7 +108,6 @@ type ExecutorMock struct {
 		}
 	}
 	lockDiskUsage sync.RWMutex
-	lockGlob      sync.RWMutex
 	lockMkdirAll  sync.RWMutex
 	lockMount     sync.RWMutex
 	lockRemoveAll sync.RWMutex
@@ -160,38 +148,6 @@ func (mock *ExecutorMock) DiskUsageCalls() []struct {
 	mock.lockDiskUsage.RLock()
 	calls = mock.calls.DiskUsage
 	mock.lockDiskUsage.RUnlock()
-	return calls
-}
-
-// Glob calls GlobFunc.
-func (mock *ExecutorMock) Glob(pattern string) ([]string, error) {
-	if mock.GlobFunc == nil {
-		panic("ExecutorMock.GlobFunc: method is nil but Executor.Glob was just called")
-	}
-	callInfo := struct {
-		Pattern string
-	}{
-		Pattern: pattern,
-	}
-	mock.lockGlob.Lock()
-	mock.calls.Glob = append(mock.calls.Glob, callInfo)
-	mock.lockGlob.Unlock()
-	return mock.GlobFunc(pattern)
-}
-
-// GlobCalls gets all the calls that were made to Glob.
-// Check the length with:
-//
-//	len(mockedExecutor.GlobCalls())
-func (mock *ExecutorMock) GlobCalls() []struct {
-	Pattern string
-} {
-	var calls []struct {
-		Pattern string
-	}
-	mock.lockGlob.RLock()
-	calls = mock.calls.Glob
-	mock.lockGlob.RUnlock()
 	return calls
 }
 

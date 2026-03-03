@@ -74,16 +74,15 @@ Restore cache paths from a Namespace volume.
 
 **Flags:**
 
-| Flag           | Description                                                                                                                                                                                                                   |
-|----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--detect`     | Detects cache mode(s) based on environment. Use `--detect='*'` to enable all detectors, or specify individual modes like `--detect=apt`. Can be specified multiple times.                                                     |
-| `--mode`       | Explicit cache mode(s) to enable (e.g., `--mode=go`). Can be specified multiple times.                                                                                                                                        |
-| `--path`       | Explicit cache path(s) to enable (e.g., `--path=/some/path`). Can be specified multiple times.                                                                                                                                |
-| `--glob`       | Glob pattern(s) to expand and mount. Supports `*` (match any characters), `?` (match a single character), and `[charset]` character classes. Does **not** support `**` (recursive/globstar). Can be specified multiple times. |
-| `--cache_root` | Override the root path where cache volumes are mounted. Defaults to `$NSC_CACHE_PATH`.                                                                                                                                        |
-| `--dry_run`    | If true, mounting is skipped and only reports what would be done. Defaults to `true` outside CI, `false` in CI (GitHub Actions, GitLab CI).                                                                                   |
-| `--eval_file`  | Write a file that can be sourced to export environment variables.                                                                                                                                                             |
-| `--output, -o` | Output format: `plain` or `json`. Defaults to `plain`.                                                                                                                                                                        |
+| Flag | Description |
+|------|-------------|
+| `--detect` | Detects cache mode(s) based on environment. Use `--detect='*'` to enable all detectors, or specify individual modes like `--detect=apt`. Can be specified multiple times. |
+| `--mode` | Explicit cache mode(s) to enable (e.g., `--mode=go`). Can be specified multiple times. |
+| `--path` | Explicit cache path(s) to enable (e.g., `--path=/some/path`). Can be specified multiple times. |
+| `--cache_root` | Override the root path where cache volumes are mounted. Defaults to `$NSC_CACHE_PATH`. |
+| `--dry_run` | If true, mounting is skipped and only reports what would be done. Defaults to `true` outside CI, `false` in CI (GitHub Actions, GitLab CI). |
+| `--eval_file` | Write a file that can be sourced to export environment variables. |
+| `--output, -o` | Output format: `plain` or `json`. Defaults to `plain`. |
 
 **Examples:**
 
@@ -102,12 +101,6 @@ spacectl cache mount --path=/some/path
 
 # Combine detection with explicit paths
 spacectl cache mount --detect='*' --path=/custom/cache
-
-# Mount paths matching a glob pattern
-spacectl cache mount --glob='~/.cache/go-build-*'
-
-# Mount multiple glob patterns
-spacectl cache mount --glob='/tmp/cache-*' --glob='~/.local/share/pip-*'
 ```
 
 ## Contributing
