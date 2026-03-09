@@ -1,0 +1,52 @@
+name: Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  # Tests the nscloud-cache-action against all cache modes using the current spacectl binary.
+  # This ensures changes to spacectl don't break any cache mode integrations.
+  action-modes:
+    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9
+    with:
+      spacectl-source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+  # Single check for branch protection after all mode tests complete
+  action-modes-ok:
+    name: Verify cache modes
+    needs: action-modes
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check mode tests passed
+        run: |
+          if [[ "${{ needs.action-modes.result }}" != "success" ]]; then
+            echo "Actions mode tests failed with result: ${{ needs.action-modes.result }}"
+            exit 1
+          fi
+          echo "All mode tests passed"
+
+  # Validate Xcode DerivedData hash
+  xcode-hash:
+    name: Validate hash against xcodebuild
+    runs-on:
+      - nscloud-macos-tahoe-arm64-12x28
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Validate Xcode DerivedData hash
+        env:
+          NSC_TEST_XCODE_HASH: "1"
+        run: go test -v -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/
