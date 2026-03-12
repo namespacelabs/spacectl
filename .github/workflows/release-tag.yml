@@ -45,7 +45,6 @@ jobs:
       - name: Set up cache
         uses: namespacelabs/nscloud-cache-action@a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9 # v1.4.2
         with:
-          space-enabled: true
           cache: go
 
       - name: Run GoReleaser
