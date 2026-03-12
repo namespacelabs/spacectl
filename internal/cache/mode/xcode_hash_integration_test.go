@@ -9,14 +9,14 @@ import (
 	"testing"
 )
 
-// TestXcodeDerivedDataHash_Integration validates our hash implementation against
+// TestIntegration_XcodeDerivedDataHash validates our hash implementation against
 // the actual DerivedData directory that Xcode creates. It requires macOS with
 // Xcode installed.
 //
-// Run with: NSC_TEST_XCODE_HASH=1 go test -v -run TestXcodeDerivedDataHash_Integration ./internal/cache/mode/
-func TestXcodeDerivedDataHash_Integration(t *testing.T) {
-	if os.Getenv("NSC_TEST_XCODE_HASH") == "" {
-		t.Skip("set NSC_TEST_XCODE_HASH=1 to run this integration test")
+// Run with: INTEGRATION_TEST_XCODE_HASH=1 go test -v -run TestIntegration_XcodeDerivedDataHash ./internal/cache/mode/
+func TestIntegration_XcodeDerivedDataHash(t *testing.T) {
+	if os.Getenv("INTEGRATION_TEST_XCODE_HASH") == "" {
+		t.Skip("set INTEGRATION_TEST_XCODE_HASH=1 to run this integration test")
 	}
 
 	// Copy the minimal fixture to a temp dir so the absolute path is unique.

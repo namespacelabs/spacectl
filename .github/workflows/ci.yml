@@ -13,7 +13,7 @@ on:
 jobs:
   go:
     runs-on:
-      - nscloud-ubuntu-22.04-amd64-4x16-with-cache
+      - nscloud-ubuntu-22.04-amd64-8x16-with-cache
       - nscloud-cache-size-20gb
       - nscloud-cache-tag-spacectl
     steps:
