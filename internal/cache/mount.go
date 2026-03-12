@@ -64,7 +64,7 @@ type MountResponseInput struct {
 }
 
 type MountResponseOutput struct {
-	DestructiveMode bool              `json:"destructive_mode,"`
+	DestructiveMode bool              `json:"destructive_mode"`
 	AddEnvs         map[string]string `json:"add_envs,omitzero"`
 	DiskUsage       *DiskUsage        `json:"disk_usage,omitzero"` // lookup can fail, so inclusion is optional
 	Mounts          []MountResult     `json:"mounts,omitzero"`
