@@ -26,6 +26,7 @@ func DefaultModes() Modes {
 		MavenProvider{},
 		MiseProvider{},
 		NixProvider{},
+		NpmProvider{},
 		PlaywrightProvider{},
 		PnpmProvider{},
 		PoetryProvider{},

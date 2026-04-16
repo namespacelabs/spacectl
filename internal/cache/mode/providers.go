@@ -656,6 +656,51 @@ func (p NixProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, err
 	}, nil
 }
 
+// NpmProvider
+
+const npmLockFile = "package-lock.json"
+
+type NpmProvider struct{}
+
+func (p NpmProvider) Name() string {
+	return "npm"
+}
+
+func (p NpmProvider) Detect(ctx context.Context, req DetectRequest) (bool, error) {
+	if _, err := req.Exec.LookPath("npm"); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("lookpath npm: %w", err)
+	}
+
+	if _, err := req.Exec.Stat(npmLockFile); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, fmt.Errorf("stat %s: %w", npmLockFile, err)
+	}
+
+	return true, nil
+}
+
+func (p NpmProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
+	cmd := exec.CommandContext(ctx, "npm", "config", "get", "cache")
+	output, err := req.Exec.Output(cmd)
+	if err != nil {
+		return PlanResult{}, fmt.Errorf("npm config get cache: %w", err)
+	}
+
+	cacheDir := strings.TrimSpace(string(output))
+	if cacheDir == "" {
+		return PlanResult{}, fmt.Errorf("empty cache dir from npm config")
+	}
+
+	return PlanResult{
+		MountPaths: []string{cacheDir},
+	}, nil
+}
+
 // PlaywrightProvider
 
 const (

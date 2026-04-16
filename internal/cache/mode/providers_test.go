@@ -1,6 +1,7 @@
 package mode_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1135,6 +1136,109 @@ func TestNixProvider_Plan(t *testing.T) {
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
 		require.Equal(t, []string{"~/.cache/nix", "/nix"}, result.MountPaths)
+	})
+}
+
+// NpmProvider tests
+
+func TestNpmProvider_Detect(t *testing.T) {
+	t.Run("detected when binary and package-lock.json exist", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/local/bin/npm", nil
+				},
+				StatFunc: func(name string) (os.FileInfo, error) {
+					require.Equal(t, "package-lock.json", name)
+					return nil, nil
+				},
+			},
+		}
+
+		p := mode.NpmProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.True(t, detected)
+	})
+
+	t.Run("not detected when binary missing", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "", exec.ErrNotFound
+				},
+			},
+		}
+
+		p := mode.NpmProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.False(t, detected)
+	})
+
+	t.Run("not detected when package-lock.json missing", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/local/bin/npm", nil
+				},
+				StatFunc: func(name string) (os.FileInfo, error) {
+					return nil, os.ErrNotExist
+				},
+			},
+		}
+
+		p := mode.NpmProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.False(t, detected)
+	})
+}
+
+func TestNpmProvider_Plan(t *testing.T) {
+	t.Run("cache path extracted from npm config", func(t *testing.T) {
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return []byte("/home/user/.npm\n"), nil
+				},
+			},
+		}
+
+		p := mode.NpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{"/home/user/.npm"}, result.MountPaths)
+	})
+
+	t.Run("npm config get cache error is returned", func(t *testing.T) {
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return nil, fmt.Errorf("npm config failed")
+				},
+			},
+		}
+
+		p := mode.NpmProvider{}
+		_, err := p.Plan(t.Context(), req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "npm config get cache")
+	})
+
+	t.Run("empty cache dir returns error", func(t *testing.T) {
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return []byte(""), nil
+				},
+			},
+		}
+
+		p := mode.NpmProvider{}
+		_, err := p.Plan(t.Context(), req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "empty cache dir")
 	})
 }
 
