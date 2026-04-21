@@ -15,7 +15,7 @@ jobs:
   # This ensures changes to spacectl don't break any cache mode integrations.
   cache-modes:
     name: cache modes
-    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9
+    uses: namespacelabs/nscloud-cache-action/.github/workflows/modes-reusable.yaml@15799a6b54e5765f85b2aac25b3f0df43ed571c0
     with:
       spacectl-source-ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
