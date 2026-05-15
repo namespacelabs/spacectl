@@ -150,12 +150,14 @@ type DetectRequest struct {
 }
 
 type PlanRequest struct {
+	CacheRoot    string
 	EnabledModes []string
 	Exec         Executor
 }
 
 type PlanResult struct {
 	AddEnvs     map[string]string
+	CacheDirs   []string
 	MountPaths  []string
 	RemovePaths []string
 }

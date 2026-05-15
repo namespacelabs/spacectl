@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -753,6 +754,9 @@ func (p PlaywrightProvider) Plan(ctx context.Context, req PlanRequest) (PlanResu
 const (
 	pnpmPackageImportMethodKey   = "npm_config_package_import_method"
 	pnpmPackageImportMethodValue = "copy"
+	pnpmStoreDirEnvKey           = "PNPM_CONFIG_STORE_DIR"
+	pnpmHomeEnvKey               = "PNPM_HOME"
+	pnpmCacheVolumeStoreSubdir   = "pnpm-store"
 	pnpmWarningFixVersion        = "v9.7.0"
 	pnpmWarningPrefix            = "\u2009WARN\u2009" // thin space + WARN + thin space
 	pnpmLockFile                 = "pnpm-lock.yaml"
@@ -815,11 +819,47 @@ func (p PnpmProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, er
 	}
 
 	// Hard-linking and clone do not work with cache volumes. Select copy mode to avoid spurious warnings.
+	addEnvs := map[string]string{
+		pnpmPackageImportMethodKey: pnpmPackageImportMethodValue,
+	}
+
+	// pnpm/action-setup uses `pnpm self-update`, placing the binary under
+	// PNPM_HOME with backing content at <PNPM_HOME>/store/v<N>/. Bind-mounting
+	// any path under PNPM_HOME shadows the binary, so when that would happen
+	// we redirect the store onto the cache volume instead.
+	pnpmHome := strings.TrimSpace(os.Getenv(pnpmHomeEnvKey))
+	storeWouldShadowBinary := pnpmHome != "" && isDescendant(cacheDir, pnpmHome)
+	userOverride := strings.TrimSpace(os.Getenv(pnpmStoreDirEnvKey)) != ""
+
+	if !storeWouldShadowBinary {
+		return PlanResult{
+			AddEnvs:    addEnvs,
+			MountPaths: []string{cacheDir},
+		}, nil
+	}
+
+	if userOverride {
+		slog.Warn("user-set PNPM_CONFIG_STORE_DIR is inside PNPM_HOME; the pnpm binary may stop working after the cache mount",
+			slog.String("store_dir", cacheDir),
+			slog.String("pnpm_home", pnpmHome),
+		)
+		return PlanResult{
+			AddEnvs:    addEnvs,
+			MountPaths: []string{cacheDir},
+		}, nil
+	}
+
+	if req.CacheRoot == "" {
+		return PlanResult{}, fmt.Errorf(
+			"pnpm store path %q lives inside PNPM_HOME %q; bind-mounting it would shadow the pnpm binary, but no cache root was supplied so we cannot redirect the store to the cache volume",
+			cacheDir, pnpmHome,
+		)
+	}
+
+	addEnvs[pnpmStoreDirEnvKey] = filepath.Join(req.CacheRoot, pnpmCacheVolumeStoreSubdir)
 	return PlanResult{
-		AddEnvs: map[string]string{
-			pnpmPackageImportMethodKey: pnpmPackageImportMethodValue,
-		},
-		MountPaths: []string{cacheDir},
+		AddEnvs:   addEnvs,
+		CacheDirs: []string{pnpmCacheVolumeStoreSubdir},
 	}, nil
 }
 
@@ -1282,4 +1322,17 @@ func (p YarnProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, er
 	return PlanResult{
 		MountPaths: []string{cacheDir},
 	}, nil
+}
+
+// isDescendant reports whether path is equal to ancestor or lives underneath
+// it, using lexical comparison (so /foo/.bin does not match /foo/.bin-other).
+func isDescendant(path, ancestor string) bool {
+	rel, err := filepath.Rel(filepath.Clean(ancestor), filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
 }

@@ -143,25 +143,33 @@ func (m Mounter) Mount(ctx context.Context, req MountRequest) (MountResponse, er
 func (m Mounter) mountModes(ctx context.Context, modes mode.Modes, result *MountResponse) error {
 	result.Input.Modes = modes.Names()
 
-	plan, err := modes.Plan(ctx, mode.PlanRequest{})
+	plan, err := modes.Plan(ctx, mode.PlanRequest{CacheRoot: m.CacheRoot})
 	if err != nil {
 		return err
 	}
 
 	for modeName, p := range plan {
+		for k, v := range p.AddEnvs {
+			if result.Output.AddEnvs == nil {
+				result.Output.AddEnvs = make(map[string]string)
+			}
+			result.Output.AddEnvs[k] = v
+		}
+
+		for _, subdir := range p.CacheDirs {
+			mount, err := m.cacheDir(modeName, subdir)
+			if err != nil {
+				return fmt.Errorf("creating cache dir %q: %w", subdir, err)
+			}
+			result.Output.Mounts = append(result.Output.Mounts, mount)
+		}
+
 		for _, path := range p.MountPaths {
 			mount, err := m.mountPath(ctx, modeName, path)
 			if err != nil {
 				return fmt.Errorf("mounting mode path %q: %w", path, err)
 			}
 			result.Output.Mounts = append(result.Output.Mounts, mount)
-		}
-
-		for k, v := range p.AddEnvs {
-			if result.Output.AddEnvs == nil {
-				result.Output.AddEnvs = make(map[string]string)
-			}
-			result.Output.AddEnvs[k] = v
 		}
 
 		for _, path := range p.RemovePaths {
@@ -217,6 +225,34 @@ func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountRes
 
 	if err := m.Exec.Mount(ctx, cachePath, path); err != nil {
 		return MountResult{}, fmt.Errorf("mounting %q to %q: %w", cachePath, path, err)
+	}
+	return mount, nil
+}
+
+func (m Mounter) cacheDir(modeName, subdir string) (MountResult, error) {
+	cachePath := filepath.Join(m.CacheRoot, subdir)
+
+	mount := MountResult{
+		Mode:      modeName,
+		CachePath: cachePath,
+		MountPath: cachePath,
+	}
+
+	_, err := m.Exec.Stat(cachePath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return MountResult{}, fmt.Errorf("stat cache dir %q: %w", cachePath, err)
+	}
+	mount.CacheHit = err == nil
+
+	if !m.DestructiveMode {
+		slog.Debug("dry-run: would create cache dir", slog.String("path", cachePath))
+		return mount, nil
+	}
+
+	slog.Debug("creating cache dir", slog.String("path", cachePath))
+
+	if err := m.Exec.MkdirAll(cachePath, 0o755); err != nil {
+		return MountResult{}, fmt.Errorf("creating cache dir %q: %w", cachePath, err)
 	}
 	return mount, nil
 }

@@ -1363,6 +1363,7 @@ func TestPnpmProvider_Detect(t *testing.T) {
 
 func TestPnpmProvider_Plan(t *testing.T) {
 	t.Run("cache path extracted with new version", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "")
 		callCount := 0
 		req := mode.PlanRequest{
 			Exec: &mode.ExecutorMock{
@@ -1383,7 +1384,158 @@ func TestPnpmProvider_Plan(t *testing.T) {
 		require.Equal(t, map[string]string{"npm_config_package_import_method": "copy"}, result.AddEnvs)
 	})
 
+	t.Run("redirects store to cache volume when pnpm store path is inside PNPM_HOME", func(t *testing.T) {
+		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
+		t.Setenv("PNPM_HOME", pnpmHome)
+		t.Setenv("PNPM_CONFIG_STORE_DIR", "")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("11.0.0\n"), nil
+					}
+					return []byte(pnpmHome + "/store/v11\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Empty(t, result.MountPaths)
+		require.Equal(t, []string{"pnpm-store"}, result.CacheDirs)
+		require.Equal(t, "/cache/pnpm-store", result.AddEnvs["PNPM_CONFIG_STORE_DIR"])
+		require.Equal(t, "copy", result.AddEnvs["npm_config_package_import_method"])
+	})
+
+	t.Run("uses original mount when store path is outside PNPM_HOME", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "/home/runner/setup-pnpm/node_modules/.bin")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("11.0.0\n"), nil
+					}
+					return []byte("/home/runner/.local/share/pnpm/store/v11\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{"/home/runner/.local/share/pnpm/store/v11"}, result.MountPaths)
+		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
+	})
+
+	t.Run("uses original mount when PNPM_HOME is unset", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("11.0.0\n"), nil
+					}
+					return []byte("/home/runner/setup-pnpm/node_modules/.bin/store/v11\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{"/home/runner/setup-pnpm/node_modules/.bin/store/v11"}, result.MountPaths)
+		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
+	})
+
+	t.Run("uses original mount when path shares prefix but is not a descendant", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "/home/runner/setup-pnpm/node_modules/.bin")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("11.0.0\n"), nil
+					}
+					return []byte("/home/runner/setup-pnpm/node_modules/.bin-other/store/v11\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{"/home/runner/setup-pnpm/node_modules/.bin-other/store/v11"}, result.MountPaths)
+		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
+	})
+
+	t.Run("respects user-set PNPM_CONFIG_STORE_DIR", func(t *testing.T) {
+		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
+		t.Setenv("PNPM_HOME", pnpmHome)
+		t.Setenv("PNPM_CONFIG_STORE_DIR", pnpmHome+"/custom-store")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("11.0.0\n"), nil
+					}
+					return []byte(pnpmHome + "/custom-store\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{pnpmHome + "/custom-store"}, result.MountPaths)
+		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
+	})
+
+	t.Run("errors when cache root is unset and store would shadow binary", func(t *testing.T) {
+		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
+		t.Setenv("PNPM_HOME", pnpmHome)
+		t.Setenv("PNPM_CONFIG_STORE_DIR", "")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("11.0.0\n"), nil
+					}
+					return []byte(pnpmHome + "/store/v11\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		_, err := p.Plan(t.Context(), req)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cache root")
+	})
+
 	t.Run("old version extracts version from last line when warnings present", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "")
 		callCount := 0
 		req := mode.PlanRequest{
 			Exec: &mode.ExecutorMock{
@@ -1405,6 +1557,7 @@ func TestPnpmProvider_Plan(t *testing.T) {
 	})
 
 	t.Run("cache path extracted with old version drops single warning", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "")
 		callCount := 0
 		req := mode.PlanRequest{
 			Exec: &mode.ExecutorMock{
@@ -1426,6 +1579,7 @@ func TestPnpmProvider_Plan(t *testing.T) {
 	})
 
 	t.Run("cache path extracted with old version drops multiple warnings", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "")
 		callCount := 0
 		req := mode.PlanRequest{
 			Exec: &mode.ExecutorMock{
@@ -1447,6 +1601,7 @@ func TestPnpmProvider_Plan(t *testing.T) {
 	})
 
 	t.Run("new version does not filter warnings", func(t *testing.T) {
+		t.Setenv("PNPM_HOME", "")
 		callCount := 0
 		req := mode.PlanRequest{
 			Exec: &mode.ExecutorMock{
