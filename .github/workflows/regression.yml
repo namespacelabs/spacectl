@@ -1,0 +1,32 @@
+name: Regression
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+  merge_group:
+    types: [checks_requested]
+
+jobs:
+  pnpm-setup-v6:
+    runs-on:
+      - nscloud-ubuntu-22.04-amd64-8x16-with-cache
+      - nscloud-cache-size-20gb
+      - nscloud-cache-tag-spacectl
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: 11
+
+      - name: Set up Nix cache
+        uses: namespacelabs/nscloud-cache-action@a90bb5d4b27522ce881c6e98eebd7d7e6d1653f9 # v1.4.2
+        with:
+          cache: pnpm
+
+      - name: Invoke pnpm binary
+        run: pnpm store path
