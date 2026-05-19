@@ -33,7 +33,7 @@ jobs:
           path: /nix
 
       - name: Install Nix
-        uses: cachix/install-nix-action@ab739621df7a23f52766f9ccc97f38da6b7af14f # v31.10.5
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
         with:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
@@ -48,7 +48,7 @@ jobs:
           cache: go
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@1a80836c5c9d9e5755a25cb59ec6f45a3b5f41a8 # v7.2.1
+        uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
           distribution: goreleaser
           version: "~> v2"
