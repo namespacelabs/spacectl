@@ -754,12 +754,15 @@ func (p PlaywrightProvider) Plan(ctx context.Context, req PlanRequest) (PlanResu
 const (
 	pnpmPackageImportMethodKey   = "npm_config_package_import_method"
 	pnpmPackageImportMethodValue = "copy"
-	pnpmStoreDirEnvKey           = "PNPM_CONFIG_STORE_DIR"
-	pnpmHomeEnvKey               = "PNPM_HOME"
-	pnpmCacheVolumeStoreSubdir   = "pnpm-store"
-	pnpmWarningFixVersion        = "v9.7.0"
-	pnpmWarningPrefix            = "\u2009WARN\u2009" // thin space + WARN + thin space
-	pnpmLockFile                 = "pnpm-lock.yaml"
+	// pnpm <11 reads config from NPM_CONFIG_* env vars; v11+ reads from PNPM_CONFIG_*.
+	pnpmStoreDirEnvKey         = "PNPM_CONFIG_STORE_DIR"
+	pnpmLegacyStoreDirEnvKey   = "NPM_CONFIG_STORE_DIR"
+	pnpmConfigPrefixVersion    = "v11.0.0"
+	pnpmHomeEnvKey             = "PNPM_HOME"
+	pnpmCacheVolumeStoreSubdir = "pnpm-store"
+	pnpmWarningFixVersion      = "v9.7.0"
+	pnpmWarningPrefix          = "\u2009WARN\u2009" // thin space + WARN + thin space
+	pnpmLockFile               = "pnpm-lock.yaml"
 )
 
 type PnpmProvider struct{}
@@ -823,13 +826,20 @@ func (p PnpmProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, er
 		pnpmPackageImportMethodKey: pnpmPackageImportMethodValue,
 	}
 
+	// pnpm v11+ reads config from PNPM_CONFIG_* env vars; older versions read
+	// from NPM_CONFIG_*. Pick the variable that matches the running pnpm.
+	storeDirEnvKey := pnpmLegacyStoreDirEnvKey
+	if semver.Compare(version, pnpmConfigPrefixVersion) >= 0 {
+		storeDirEnvKey = pnpmStoreDirEnvKey
+	}
+
 	// pnpm/action-setup uses `pnpm self-update`, placing the binary under
 	// PNPM_HOME with backing content at <PNPM_HOME>/store/v<N>/. Bind-mounting
 	// any path under PNPM_HOME shadows the binary, so when that would happen
 	// we redirect the store onto the cache volume instead.
 	pnpmHome := strings.TrimSpace(os.Getenv(pnpmHomeEnvKey))
 	storeWouldShadowBinary := pnpmHome != "" && isDescendant(cacheDir, pnpmHome)
-	userOverride := strings.TrimSpace(os.Getenv(pnpmStoreDirEnvKey)) != ""
+	userOverride := strings.TrimSpace(os.Getenv(storeDirEnvKey)) != ""
 
 	if !storeWouldShadowBinary {
 		return PlanResult{
@@ -839,7 +849,8 @@ func (p PnpmProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, er
 	}
 
 	if userOverride {
-		slog.Warn("user-set PNPM_CONFIG_STORE_DIR is inside PNPM_HOME; the pnpm binary may stop working after the cache mount",
+		slog.Warn("user-set pnpm store dir is inside PNPM_HOME; the pnpm binary may stop working after the cache mount",
+			slog.String("env_key", storeDirEnvKey),
 			slog.String("store_dir", cacheDir),
 			slog.String("pnpm_home", pnpmHome),
 		)
@@ -856,7 +867,7 @@ func (p PnpmProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, er
 		)
 	}
 
-	addEnvs[pnpmStoreDirEnvKey] = filepath.Join(req.CacheRoot, pnpmCacheVolumeStoreSubdir)
+	addEnvs[storeDirEnvKey] = filepath.Join(req.CacheRoot, pnpmCacheVolumeStoreSubdir)
 	return PlanResult{
 		AddEnvs:   addEnvs,
 		CacheDirs: []string{pnpmCacheVolumeStoreSubdir},
