@@ -1384,10 +1384,11 @@ func TestPnpmProvider_Plan(t *testing.T) {
 		require.Equal(t, map[string]string{"npm_config_package_import_method": "copy"}, result.AddEnvs)
 	})
 
-	t.Run("redirects store to cache volume when pnpm store path is inside PNPM_HOME", func(t *testing.T) {
+	t.Run("redirects store via PNPM_CONFIG_STORE_DIR for pnpm v11+", func(t *testing.T) {
 		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
 		t.Setenv("PNPM_HOME", pnpmHome)
 		t.Setenv("PNPM_CONFIG_STORE_DIR", "")
+		t.Setenv("NPM_CONFIG_STORE_DIR", "")
 
 		callCount := 0
 		req := mode.PlanRequest{
@@ -1409,6 +1410,37 @@ func TestPnpmProvider_Plan(t *testing.T) {
 		require.Empty(t, result.MountPaths)
 		require.Equal(t, []string{"pnpm-store"}, result.CacheDirs)
 		require.Equal(t, "/cache/pnpm-store", result.AddEnvs["PNPM_CONFIG_STORE_DIR"])
+		require.NotContains(t, result.AddEnvs, "NPM_CONFIG_STORE_DIR")
+		require.Equal(t, "copy", result.AddEnvs["npm_config_package_import_method"])
+	})
+
+	t.Run("redirects store via NPM_CONFIG_STORE_DIR for pnpm <11", func(t *testing.T) {
+		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
+		t.Setenv("PNPM_HOME", pnpmHome)
+		t.Setenv("PNPM_CONFIG_STORE_DIR", "")
+		t.Setenv("NPM_CONFIG_STORE_DIR", "")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("10.0.0\n"), nil
+					}
+					return []byte(pnpmHome + "/store/v10\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Empty(t, result.MountPaths)
+		require.Equal(t, []string{"pnpm-store"}, result.CacheDirs)
+		require.Equal(t, "/cache/pnpm-store", result.AddEnvs["NPM_CONFIG_STORE_DIR"])
+		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
 		require.Equal(t, "copy", result.AddEnvs["npm_config_package_import_method"])
 	})
 
@@ -1488,6 +1520,7 @@ func TestPnpmProvider_Plan(t *testing.T) {
 		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
 		t.Setenv("PNPM_HOME", pnpmHome)
 		t.Setenv("PNPM_CONFIG_STORE_DIR", pnpmHome+"/custom-store")
+		t.Setenv("NPM_CONFIG_STORE_DIR", "")
 
 		callCount := 0
 		req := mode.PlanRequest{
@@ -1508,12 +1541,42 @@ func TestPnpmProvider_Plan(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []string{pnpmHome + "/custom-store"}, result.MountPaths)
 		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
+		require.NotContains(t, result.AddEnvs, "NPM_CONFIG_STORE_DIR")
+	})
+
+	t.Run("respects user-set NPM_CONFIG_STORE_DIR (legacy pnpm < 11)", func(t *testing.T) {
+		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
+		t.Setenv("PNPM_HOME", pnpmHome)
+		t.Setenv("PNPM_CONFIG_STORE_DIR", "")
+		t.Setenv("NPM_CONFIG_STORE_DIR", pnpmHome+"/custom-store")
+
+		callCount := 0
+		req := mode.PlanRequest{
+			CacheRoot: "/cache",
+			Exec: &mode.ExecutorMock{
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						return []byte("10.0.0\n"), nil
+					}
+					return []byte(pnpmHome + "/custom-store\n"), nil
+				},
+			},
+		}
+
+		p := mode.PnpmProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{pnpmHome + "/custom-store"}, result.MountPaths)
+		require.NotContains(t, result.AddEnvs, "PNPM_CONFIG_STORE_DIR")
+		require.NotContains(t, result.AddEnvs, "NPM_CONFIG_STORE_DIR")
 	})
 
 	t.Run("errors when cache root is unset and store would shadow binary", func(t *testing.T) {
 		pnpmHome := "/home/runner/setup-pnpm/node_modules/.bin"
 		t.Setenv("PNPM_HOME", pnpmHome)
 		t.Setenv("PNPM_CONFIG_STORE_DIR", "")
+		t.Setenv("NPM_CONFIG_STORE_DIR", "")
 
 		callCount := 0
 		req := mode.PlanRequest{
