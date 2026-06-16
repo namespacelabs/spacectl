@@ -23,6 +23,7 @@ func DefaultModes() Modes {
 		GoProvider{},
 		GolangCILintProvider{},
 		GradleProvider{},
+		LixProvider{},
 		MavenProvider{},
 		MiseProvider{},
 		NixProvider{},
@@ -160,6 +161,13 @@ type PlanResult struct {
 	CacheDirs   []string
 	MountPaths  []string
 	RemovePaths []string
+
+	// PostRemovePaths lists paths to delete during the cache action's post
+	// step, i.e. just before the cache volume is persisted for the next run.
+	// Unlike RemovePaths (removed at mount time), these are removed at the end
+	// of the job so that transient install state is never carried across runs.
+	// See the lix mode for the motivating case.
+	PostRemovePaths []string
 }
 
 type Executor interface {

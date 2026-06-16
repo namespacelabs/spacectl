@@ -1026,6 +1026,105 @@ func TestMiseProvider_Plan(t *testing.T) {
 	})
 }
 
+// LixProvider tests
+
+func TestLixProvider_Detect(t *testing.T) {
+	t.Run("detected when binary is lix and flake.nix exists", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/nix/var/nix/profiles/default/bin/nix", nil
+				},
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return []byte("nix (Lix, like Nix) 2.95.2\nSystem type: x86_64-linux\n"), nil
+				},
+				StatFunc: func(name string) (os.FileInfo, error) {
+					if name == "flake.nix" {
+						return nil, nil
+					}
+					return nil, os.ErrNotExist
+				},
+			},
+		}
+
+		p := mode.LixProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.True(t, detected)
+	})
+
+	t.Run("not detected when binary is upstream Nix", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/bin/nix", nil
+				},
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return []byte("nix (Nix) 2.24.9\n"), nil
+				},
+				StatFunc: func(name string) (os.FileInfo, error) {
+					return nil, nil
+				},
+			},
+		}
+
+		p := mode.LixProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.False(t, detected)
+	})
+
+	t.Run("not detected when binary missing", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "", exec.ErrNotFound
+				},
+			},
+		}
+
+		p := mode.LixProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.False(t, detected)
+	})
+
+	t.Run("not detected when project files missing", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/nix/var/nix/profiles/default/bin/nix", nil
+				},
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return []byte("nix (Lix, like Nix) 2.95.2\n"), nil
+				},
+				StatFunc: func(name string) (os.FileInfo, error) {
+					return nil, os.ErrNotExist
+				},
+			},
+		}
+
+		p := mode.LixProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.False(t, detected)
+	})
+}
+
+func TestLixProvider_Plan(t *testing.T) {
+	t.Run("mounts the store and drops install state in post", func(t *testing.T) {
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{},
+		}
+
+		p := mode.LixProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{"~/.cache/nix", "/nix"}, result.MountPaths)
+		require.Equal(t, []string{"/nix/receipt.json", "/etc/nix/nix.conf"}, result.PostRemovePaths)
+	})
+}
+
 // NixProvider tests
 
 func TestNixProvider_Detect(t *testing.T) {

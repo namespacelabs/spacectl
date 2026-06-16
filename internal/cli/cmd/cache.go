@@ -26,6 +26,7 @@ func NewCacheCmd() *cobra.Command {
 
 	cmd.AddCommand(newCacheModesCmd())
 	cmd.AddCommand(newCacheMountCmd())
+	cmd.AddCommand(newCachePostCmd())
 
 	return cmd
 }
@@ -102,6 +103,59 @@ func newCacheMountCmd() *cobra.Command {
 		}
 
 		outputMountText(w, result)
+		return nil
+	}
+
+	return cmd
+}
+
+func newCachePostCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "post",
+		Short: "Run post-step cache cleanup before the volume is persisted",
+		Long: "Removes transient install state that modes mark for post-step removal " +
+			"(e.g. the lix installer receipt), so it is not carried across runs. " +
+			"Intended to be invoked from a cache action's post step with the same " +
+			"mode selection used at mount time.",
+	}
+
+	dryRun := cmd.Flags().Bool("dry_run", !isCI(), "If true, removal of paths is skipped.")
+	cacheRoot := cmd.Flags().String("cache_root", os.Getenv(defaultCacheRootEnv), "Override the root path where cache volumes are mounted.")
+	detectModes := cmd.Flags().StringSlice("detect", []string{}, "Detects cache mode(s) based on environment. Supply '*' to enable all detectors.")
+	manualModes := cmd.Flags().StringSlice("mode", []string{}, "Explicit cache mode(s) to enable.")
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		mounter, err := cache.NewMounter(*cacheRoot)
+		if err != nil {
+			return err
+		}
+
+		mounter.DestructiveMode = !*dryRun
+		if !mounter.DestructiveMode {
+			slog.Info("Dry Run mode enabled.")
+		}
+
+		result, err := mounter.Post(cmd.Context(), cache.MountRequest{
+			DetectAllModes: len(*detectModes) == 1 && (*detectModes)[0] == "*",
+			DetectModes:    *detectModes,
+			ManualModes:    *manualModes,
+		})
+		if err != nil {
+			return err
+		}
+
+		var w io.Writer = os.Stdout
+		if output, _ := cmd.Flags().GetString("output"); output == "json" {
+			enc := json.NewEncoder(w)
+			enc.SetIndent("", "  ")
+			return enc.Encode(result)
+		}
+
+		if len(result.RemovedPaths) > 0 {
+			slog.Info(fmt.Sprintf("Removed %d path(s): %s", len(result.RemovedPaths), strings.Join(result.RemovedPaths, ", ")))
+		} else {
+			slog.Info("No paths to remove")
+		}
 		return nil
 	}
 

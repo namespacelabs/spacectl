@@ -657,6 +657,90 @@ func (p NixProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, err
 	}, nil
 }
 
+// LixProvider
+//
+// Lix (https://lix.systems) is a Nix-compatible package manager that the
+// lix-installer sets up in multi-user mode: the store lives under /nix and is
+// owned by root, builds run as the nixbld users, and a nix-daemon brokers all
+// store access. Caching this store across runs is the whole point of the mode.
+//
+// The store is persisted by bind-mounting /nix from the cache volume. The
+// lix-installer is not idempotent over a warm /nix, so two install-state files
+// must be dropped in the post step before the volume is persisted (validated
+// live on a namespace-profile-ubuntu-systemd runner, see SUP-484):
+//
+//   - /nix/receipt.json: the installer records a completed plan here. If it is
+//     persisted, the next run's `lix-installer install` aborts with "Found
+//     existing plan in /nix/receipt.json".
+//
+//   - /etc/nix/nix.conf: the installer action writes a per-run GitHub token and
+//     extra-nix-path into this file. If it is persisted, the next run's
+//     installer aborts in create_or_merge_nix_config with "Could not merge Nix
+//     configuration for key(s) `extra-nix-path`". (Dropping the receipt alone
+//     is NOT sufficient -- both files must go.)
+//
+// With both removed, the next run reinstalls cleanly over the warm store: the
+// heavy /nix/store contents are reused while the install is reconciled fresh.
+//
+// Note: this requires a systemd runner profile -- the installer brings the
+// nix-daemon up via systemd, which the cache mode does not manage. The mount is
+// purely about persistence. See PROPOSAL-lix.md.
+
+const (
+	lixReceiptPath = "/nix/receipt.json"
+	lixNixConfPath = "/etc/nix/nix.conf"
+	lixVersionMark = "lix"
+)
+
+type LixProvider struct{}
+
+func (p LixProvider) Name() string {
+	return "lix"
+}
+
+func (p LixProvider) Detect(ctx context.Context, req DetectRequest) (bool, error) {
+	if _, err := req.Exec.LookPath("nix"); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("lookpath nix: %w", err)
+	}
+
+	// Distinguish lix from upstream Nix: `nix --version` prints e.g.
+	// "nix (Lix, like Nix) 2.95.2" for lix, and "nix (Nix) 2.x.y" for Nix.
+	cmd := exec.CommandContext(ctx, "nix", "--version")
+	output, err := req.Exec.Output(cmd)
+	if err != nil {
+		return false, fmt.Errorf("nix --version: %w", err)
+	}
+	if !strings.Contains(strings.ToLower(string(output)), lixVersionMark) {
+		return false, nil
+	}
+
+	for _, projectFile := range nixProjectFiles {
+		if _, err := req.Exec.Stat(projectFile); err == nil {
+			return true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, fmt.Errorf("stat %s: %w", projectFile, err)
+		}
+	}
+
+	return false, nil
+}
+
+func (p LixProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
+	return PlanResult{
+		MountPaths: []string{
+			nixCachePath,
+			"/nix",
+		},
+		PostRemovePaths: []string{
+			lixReceiptPath,
+			lixNixConfPath,
+		},
+	}, nil
+}
+
 // NpmProvider
 
 const npmLockFile = "package-lock.json"

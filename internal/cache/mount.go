@@ -140,6 +140,48 @@ func (m Mounter) Mount(ctx context.Context, req MountRequest) (MountResponse, er
 	return result, nil
 }
 
+type PostResponse struct {
+	Input        MountResponseInput `json:"input,omitzero"`
+	RemovedPaths []string           `json:"removed_paths,omitzero"`
+}
+
+// Post runs the post-step cleanup for the enabled modes. It removes any paths a
+// mode marked via PostRemovePaths, so transient install state (e.g. the lix
+// installer receipt) is dropped from the cache volume before it is persisted
+// for the next run. It does not unmount; the bind mounts themselves are torn
+// down with the job.
+func (m Mounter) Post(ctx context.Context, req MountRequest) (PostResponse, error) {
+	modes, err := req.EnabledModes(ctx, m.Modes)
+	if err != nil {
+		return PostResponse{}, err
+	}
+
+	result := PostResponse{Input: MountResponseInput{Modes: modes.Names()}}
+
+	plan, err := modes.Plan(ctx, mode.PlanRequest{CacheRoot: m.CacheRoot})
+	if err != nil {
+		return PostResponse{}, err
+	}
+
+	for _, p := range plan {
+		for _, path := range p.PostRemovePaths {
+			result.RemovedPaths = append(result.RemovedPaths, path)
+
+			if !m.DestructiveMode {
+				slog.Debug("dry-run: would remove post path", slog.String("path", path))
+				continue
+			}
+
+			slog.Debug("removing post path", slog.String("path", path))
+			if err := m.Exec.RemoveAll(path); err != nil {
+				return PostResponse{}, fmt.Errorf("removing post path %q: %w", path, err)
+			}
+		}
+	}
+
+	return result, nil
+}
+
 func (m Mounter) mountModes(ctx context.Context, modes mode.Modes, result *MountResponse) error {
 	result.Input.Modes = modes.Names()
 

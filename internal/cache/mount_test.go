@@ -1152,3 +1152,80 @@ func TestMountTargetExists(t *testing.T) {
 		require.False(t, exists)
 	})
 }
+
+func TestMounter_Post(t *testing.T) {
+	t.Run("removes post paths for enabled modes", func(t *testing.T) {
+		cacheRoot := t.TempDir()
+
+		exec := &cache.ExecutorMock{
+			RemoveAllFunc: func(name string) error {
+				return nil
+			},
+		}
+		m := cache.Mounter{
+			DestructiveMode: true,
+			CacheRoot:       cacheRoot,
+			Exec:            exec,
+			Modes: mode.Modes{
+				&mode.ModeProviderMock{
+					NameFunc: func() string { return "lix" },
+					DetectFunc: func(ctx context.Context, req mode.DetectRequest) (bool, error) {
+						return false, nil
+					},
+					PlanFunc: func(ctx context.Context, req mode.PlanRequest) (mode.PlanResult, error) {
+						return mode.PlanResult{
+							MountPaths:      []string{"/nix"},
+							PostRemovePaths: []string{"/nix/receipt.json"},
+						}, nil
+					},
+				},
+			},
+		}
+
+		result, err := m.Post(t.Context(), cache.MountRequest{
+			ManualModes: []string{"lix"},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, []string{"/nix/receipt.json"}, result.RemovedPaths)
+		removeCalls := exec.RemoveAllCalls()
+		require.Len(t, removeCalls, 1)
+		require.Equal(t, "/nix/receipt.json", removeCalls[0].Name)
+	})
+
+	t.Run("dry-run does not remove paths", func(t *testing.T) {
+		cacheRoot := t.TempDir()
+
+		exec := &cache.ExecutorMock{
+			RemoveAllFunc: func(name string) error {
+				return nil
+			},
+		}
+		m := cache.Mounter{
+			DestructiveMode: false,
+			CacheRoot:       cacheRoot,
+			Exec:            exec,
+			Modes: mode.Modes{
+				&mode.ModeProviderMock{
+					NameFunc: func() string { return "lix" },
+					DetectFunc: func(ctx context.Context, req mode.DetectRequest) (bool, error) {
+						return false, nil
+					},
+					PlanFunc: func(ctx context.Context, req mode.PlanRequest) (mode.PlanResult, error) {
+						return mode.PlanResult{
+							PostRemovePaths: []string{"/nix/receipt.json"},
+						}, nil
+					},
+				},
+			},
+		}
+
+		result, err := m.Post(t.Context(), cache.MountRequest{
+			ManualModes: []string{"lix"},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, []string{"/nix/receipt.json"}, result.RemovedPaths)
+		require.Empty(t, exec.RemoveAllCalls())
+	})
+}
