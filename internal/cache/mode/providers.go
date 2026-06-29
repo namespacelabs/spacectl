@@ -1087,6 +1087,64 @@ func (p SwiftPMProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult,
 	}, nil
 }
 
+// TuistProvider
+
+const (
+	tuistCacheHomeKey    = "TUIST_XDG_CACHE_HOME"
+	tuistXdgCacheHomeKey = "XDG_CACHE_HOME"
+	tuistDefaultPath     = "tuist"
+)
+
+var tuistMarkers = []string{
+	"Tuist.swift",
+	"Tuist", // directory; also holds the legacy Tuist/Config.swift
+	"tuist.toml",
+}
+
+type TuistProvider struct{}
+
+func (p TuistProvider) Name() string {
+	return "tuist"
+}
+
+func (p TuistProvider) Detect(ctx context.Context, req DetectRequest) (bool, error) {
+	if _, err := req.Exec.LookPath("tuist"); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("lookpath tuist: %w", err)
+	}
+
+	for _, marker := range tuistMarkers {
+		if _, err := req.Exec.Stat(marker); err == nil {
+			return true, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return false, fmt.Errorf("stat %s: %w", marker, err)
+		}
+	}
+
+	return false, nil
+}
+
+func (p TuistProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
+	var base string
+	if dir := os.Getenv(tuistCacheHomeKey); dir != "" {
+		base = dir
+	} else if dir := os.Getenv(tuistXdgCacheHomeKey); dir != "" {
+		base = dir
+	} else {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return PlanResult{}, fmt.Errorf("get user home dir: %w", err)
+		}
+		base = filepath.Join(homeDir, ".cache")
+	}
+
+	return PlanResult{
+		MountPaths: []string{filepath.Join(base, tuistDefaultPath)},
+	}, nil
+}
+
 // UVProvider
 
 const (
