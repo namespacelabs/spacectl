@@ -200,7 +200,7 @@ func (m Mounter) mountPath(ctx context.Context, modeName, path string) (MountRes
 		return MountResult{}, fmt.Errorf("resolving path: %w", err)
 	}
 
-	cachePath := filepath.Join(m.CacheRoot, path)
+	cachePath := filepath.Join(m.CacheRoot, RootSubpath(path))
 
 	mount := MountResult{
 		Mode:      modeName,
@@ -439,4 +439,19 @@ func resolveHome(path string) (string, error) {
 
 	// ~something without / is not supported (e.g., ~user)
 	return path, nil
+}
+
+// RootSubpath returns where a workload path lives beneath the cache root.
+//
+// Unix paths have no volume and are returned unchanged. On Windows the volume
+// becomes a plain component so the path nests cleanly: C:\Users\x -> C\Users\x.
+func RootSubpath(path string) string {
+	vol := filepath.VolumeName(path)
+	if vol == "" {
+		return path
+	}
+
+	rest := strings.TrimLeft(path[len(vol):], `\/`)
+	vol = strings.ReplaceAll(strings.TrimLeft(vol, `\/`), ":", "")
+	return filepath.Join(vol, rest)
 }

@@ -286,14 +286,14 @@ func TestMount(t *testing.T) {
 		require.Equal(t, []string{"apt"}, result.Input.Modes)
 		mountCalls := exec.MountCalls()
 		require.Len(t, mountCalls, 1)
-		require.Equal(t, filepath.Join(cacheRoot, mountPath), mountCalls[0].From)
+		require.Equal(t, filepath.Join(cacheRoot, cache.RootSubpath(mountPath)), mountCalls[0].From)
 		require.Equal(t, mountPath, mountCalls[0].To)
 
 		// Verify Results contains the mount
 		mounts := filterMounts(result.Output.Mounts)
 		require.Len(t, mounts, 1)
 		require.Equal(t, "apt", mounts[0].Mode)
-		require.Equal(t, filepath.Join(cacheRoot, mountPath), mounts[0].CachePath)
+		require.Equal(t, filepath.Join(cacheRoot, cache.RootSubpath(mountPath)), mounts[0].CachePath)
 		require.Equal(t, mountPath, mounts[0].MountPath)
 	})
 
@@ -357,7 +357,7 @@ func TestMount(t *testing.T) {
 		cacheRoot := t.TempDir()
 		mountPath := t.TempDir()
 
-		cachePath := filepath.Join(cacheRoot, mountPath)
+		cachePath := filepath.Join(cacheRoot, cache.RootSubpath(mountPath))
 		require.NoError(t, os.MkdirAll(cachePath, 0o755))
 
 		exec := &cache.ExecutorMock{
@@ -409,7 +409,7 @@ func TestMount(t *testing.T) {
 		mountPath1 := t.TempDir()
 		mountPath2 := t.TempDir()
 
-		cachePath1 := filepath.Join(cacheRoot, mountPath1)
+		cachePath1 := filepath.Join(cacheRoot, cache.RootSubpath(mountPath1))
 		require.NoError(t, os.MkdirAll(cachePath1, 0o755))
 
 		exec := &cache.ExecutorMock{
@@ -1056,7 +1056,7 @@ func TestMount(t *testing.T) {
 
 		mountCalls := exec.MountCalls()
 		require.Len(t, mountCalls, 1)
-		require.Equal(t, filepath.Join(cacheRoot, homeDir, ".cache/test"), mountCalls[0].From)
+		require.Equal(t, filepath.Join(cacheRoot, cache.RootSubpath(homeDir), ".cache/test"), mountCalls[0].From)
 		require.Equal(t, filepath.Join(homeDir, ".cache/test"), mountCalls[0].To)
 	})
 }
@@ -1151,4 +1151,29 @@ func TestMountTargetExists(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, exists)
 	})
+}
+
+// mountCachePath dry-run mounts a single manual path and returns the computed
+// CachePath, exercising the real mountPath composition.
+func mountCachePath(t *testing.T, cacheRoot, path string) string {
+	t.Helper()
+
+	exec := &cache.ExecutorMock{
+		StatFunc: func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		DiskUsageFunc: func(ctx context.Context, p string) (cache.DiskUsage, error) {
+			return cache.DiskUsage{}, fmt.Errorf("not implemented")
+		},
+	}
+
+	m := cache.Mounter{
+		DestructiveMode: false,
+		CacheRoot:       cacheRoot,
+		Exec:            exec,
+	}
+
+	res, err := m.Mount(t.Context(), cache.MountRequest{ManualPaths: []string{path}})
+	require.NoError(t, err)
+	require.Len(t, res.Output.Mounts, 1)
+
+	return res.Output.Mounts[0].CachePath
 }
