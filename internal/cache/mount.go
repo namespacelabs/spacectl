@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -309,11 +308,6 @@ func (e DefaultExecutor) Mount(ctx context.Context, from, to string) error {
 	return mount(ctx, from, to)
 }
 
-func (e DefaultExecutor) RemoveAll(name string) error {
-	_, err := run(context.Background(), "sudo", "rm", "-rf", name)
-	return err
-}
-
 func (e DefaultExecutor) Stat(name string) (os.FileInfo, error) {
 	return os.Stat(name)
 }
@@ -324,29 +318,6 @@ func (e DefaultExecutor) MkdirAll(path string, perm os.FileMode) error {
 
 func (e DefaultExecutor) WriteFile(name string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(name, data, perm)
-}
-
-func (e DefaultExecutor) DiskUsage(ctx context.Context, path string) (DiskUsage, error) {
-	// TODO: make this more portable across different operating systems
-	output, err := run(ctx, "df", "-h", path)
-	if err != nil {
-		return DiskUsage{}, fmt.Errorf("running df: %w", err)
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) < 2 {
-		return DiskUsage{}, errors.New("unexpected df output: missing data line")
-	}
-
-	columns := strings.Fields(lines[1])
-	if len(columns) < 3 {
-		return DiskUsage{}, errors.New("unexpected df output: insufficient columns")
-	}
-
-	return DiskUsage{
-		Total: columns[1],
-		Used:  columns[2],
-	}, nil
 }
 
 func absDir(path string) (string, error) {
@@ -445,49 +416,6 @@ func run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return output, nil
 }
 
-// chownSelf changes the ownership of the given path to the current user.
-func chownSelf(ctx context.Context, path string) error {
-	currentUser, err := user.Current()
-	if err != nil {
-		return fmt.Errorf("getting current user: %w", err)
-	}
-
-	_, err = run(ctx, "sudo", "chown", fmt.Sprintf("%s:%s", currentUser.Uid, currentUser.Gid), path)
-	if err != nil {
-		return fmt.Errorf("sudo chown failed: %w", err)
-	}
-
-	return nil
-}
-
-// sudoMkdirP creates all ancestor directories of the given path using sudo.
-func sudoMkdirP(ctx context.Context, path string) error {
-	for _, p := range ancestors(path) {
-		// Check if directory already exists
-		_, err := os.Stat(p)
-		if err == nil {
-			// Directory exists, continue to next
-			continue
-		}
-		if !errors.Is(err, os.ErrNotExist) {
-			// Some other error occurred
-			return fmt.Errorf("stat %q: %w", p, err)
-		}
-
-		// Directory doesn't exist, try to create it
-		if _, err := run(ctx, "sudo", "mkdir", p); err != nil {
-			return fmt.Errorf("sudo mkdir directory `%s`: %w", p, err)
-		}
-
-		// Change ownership to current user
-		if err := chownSelf(ctx, p); err != nil {
-			return fmt.Errorf("chown %q: %w", p, err)
-		}
-	}
-
-	return nil
-}
-
 // resolveHome expands a leading ~ in the path to the user's home directory.
 // If the path doesn't start with ~, it is returned unchanged.
 func resolveHome(path string) (string, error) {
@@ -511,21 +439,4 @@ func resolveHome(path string) (string, error) {
 
 	// ~something without / is not supported (e.g., ~user)
 	return path, nil
-}
-
-// ancestors returns all ancestor directories of the given path, from root to the path itself.
-func ancestors(path string) []string {
-	var result []string
-	for path != "/" && path != "." {
-		result = append(result, path)
-		path = filepath.Dir(path)
-	}
-
-	// Reverse to get root-to-leaf order
-	for i := len(result)/2 - 1; i >= 0; i-- {
-		opp := len(result) - 1 - i
-		result[i], result[opp] = result[opp], result[i]
-	}
-
-	return result
 }
