@@ -22,10 +22,11 @@
     in {
       devShell = pkgs.mkShell {
         buildInputs = with pkgs; [
-          go_1_25
+          go_1_26
           golangci-lint
           moq
 
+          gh
           goreleaser
         ]
         ++ (if pkgs.stdenv.isDarwin then [ apple-sdk_15 ] else []);
