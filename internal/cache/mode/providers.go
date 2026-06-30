@@ -400,10 +400,10 @@ func (p GoProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, erro
 // GolangCILintProvider
 
 const (
-	golangCILintCacheDirPrefix  = "dir:"
-	golangCILintDefaultCacheDir = "~/.cache/golangci-lint"
-	golangCILintConfigYml       = ".golangci.yml"
-	golangCILintConfigYaml      = ".golangci.yaml"
+	golangCILintCacheDirPrefix = "dir:"
+	golangCILintCacheDirName   = "golangci-lint"
+	golangCILintConfigYml      = ".golangci.yml"
+	golangCILintConfigYaml     = ".golangci.yaml"
 )
 
 type GolangCILintProvider struct{}
@@ -442,7 +442,7 @@ func (p GolangCILintProvider) Plan(ctx context.Context, req PlanRequest) (PlanRe
 		return PlanResult{}, fmt.Errorf("golangci-lint cache status: %w", err)
 	}
 
-	cacheDir := golangCILintDefaultCacheDir
+	var cacheDir string
 	scanner := bufio.NewScanner(bytes.NewReader(output))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -453,6 +453,16 @@ func (p GolangCILintProvider) Plan(ctx context.Context, req PlanRequest) (PlanRe
 	}
 	if scanner.Err() != nil {
 		return PlanResult{}, fmt.Errorf("scanning golangci-lint output: %w", scanner.Err())
+	}
+
+	// Fall back to golangci-lint's own default location, which is derived from
+	// the OS user cache dir (e.g. ~/.cache on Linux, %LocalAppData% on Windows).
+	if cacheDir == "" {
+		cacheHome, err := os.UserCacheDir()
+		if err != nil {
+			return PlanResult{}, fmt.Errorf("get user cache dir: %w", err)
+		}
+		cacheDir = filepath.Join(cacheHome, golangCILintCacheDirName)
 	}
 
 	return PlanResult{
@@ -706,9 +716,10 @@ func (p NpmProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, err
 
 const (
 	playwrightBrowsersPathKey  = "PLAYWRIGHT_BROWSERS_PATH"
+	playwrightLocalAppDataKey  = "LOCALAPPDATA"
 	playwrightDefaultCachePath = "~/.cache/ms-playwright"
 	playwrightDarwinCachePath  = "~/Library/Caches/ms-playwright"
-	playwrightWindowsCachePath = "%USERPROFILE%\\AppData\\Local\\ms-playwright"
+	playwrightCacheDir         = "ms-playwright"
 )
 
 type PlaywrightProvider struct{}
@@ -739,7 +750,15 @@ func (p PlaywrightProvider) Plan(ctx context.Context, req PlanRequest) (PlanResu
 	case "darwin":
 		mountTarget = playwrightDarwinCachePath
 	case "windows":
-		mountTarget = playwrightWindowsCachePath
+		if localAppData := os.Getenv(playwrightLocalAppDataKey); localAppData != "" {
+			mountTarget = filepath.Join(localAppData, playwrightCacheDir)
+		} else {
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				return PlanResult{}, fmt.Errorf("get user home dir: %w", err)
+			}
+			mountTarget = filepath.Join(homeDir, "AppData", "Local", playwrightCacheDir)
+		}
 	default:
 		mountTarget = playwrightDefaultCachePath
 	}

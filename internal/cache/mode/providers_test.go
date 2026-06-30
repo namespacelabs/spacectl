@@ -735,7 +735,10 @@ func TestGolangCILintProvider_Plan(t *testing.T) {
 		p := mode.GolangCILintProvider{}
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
-		require.Equal(t, []string{"~/.cache/golangci-lint"}, result.MountPaths)
+
+		cacheHome, err := os.UserCacheDir()
+		require.NoError(t, err)
+		require.Equal(t, []string{filepath.Join(cacheHome, "golangci-lint")}, result.MountPaths)
 	})
 }
 
@@ -1302,6 +1305,7 @@ func TestPlaywrightProvider_Plan(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, result.MountPaths, 1)
 		require.Contains(t, result.MountPaths[0], "ms-playwright")
+		require.NotContains(t, result.MountPaths[0], "%")
 	})
 }
 
