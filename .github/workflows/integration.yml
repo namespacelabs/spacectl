@@ -64,6 +64,79 @@ jobs:
           INTEGRATION_SPACECTL_BIN_DATE: "2025-01-01T00:00:00Z"
         run: go test -race -run TestIntegration_ ./...
 
+  # Builds the spacectl binary and performs a real (destructive) cache mount on
+  # Windows. Uses a cache-backed runner so NSC_CACHE_PATH points at a real cache
+  # volume, exercising the NTFS junction mount path end-to-end.
+  spacectl-binary-windows:
+    name: spacectl binary (windows)
+    runs-on:
+      - nscloud-windows-2022-amd64-4x8-with-cache
+      - nscloud-cache-size-20gb
+      - nscloud-cache-tag-integration-windows
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build spacectl
+        shell: bash
+        run: |
+          go build -ldflags "\
+            -X main.Version=test-v1.2.3 \
+            -X main.Commit=${{ github.sha }} \
+            -X main.Date=2025-01-01T00:00:00Z" \
+            -o dist/spacectl.exe .
+
+      - name: Mount cache directories
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          if (-not $env:NSC_CACHE_PATH) {
+            throw "NSC_CACHE_PATH is not set; expected the cache-backed runner to provide it"
+          }
+          Write-Host "NSC_CACHE_PATH=$env:NSC_CACHE_PATH"
+
+          $target = Join-Path $env:RUNNER_TEMP 'spacectl-mount-test'
+          if (Test-Path $target) { Remove-Item -Recurse -Force $target }
+
+          # Destructive mount: create an NTFS junction at $target backed by the cache volume.
+          & .\dist\spacectl.exe cache mount --dry_run=false --path="$target" -o json
+          if ($LASTEXITCODE -ne 0) { throw "spacectl cache mount failed" }
+
+          "MOUNT_TARGET=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Verify mount
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = $env:MOUNT_TARGET
+
+          # The target must be a reparse point (junction), not a plain directory.
+          $item = Get-Item -Force $target
+          if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "expected $target to be a junction, got attributes: $($item.Attributes)"
+          }
+          Write-Host "Junction created: $target -> $($item.Target)"
+
+          # Writing through the junction must land on the cache volume.
+          'hello' | Out-File -FilePath (Join-Path $target 'sentinel.txt') -Encoding ascii
+          $found = Get-ChildItem -Path $env:NSC_CACHE_PATH -Recurse -Filter sentinel.txt -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $found) {
+            throw "sentinel.txt not found under NSC_CACHE_PATH; junction did not route writes to the cache volume"
+          }
+          Write-Host "Write routed to cache: $($found.FullName)"
+
+          # Re-mounting the same path must now report a cache hit.
+          $json = & .\dist\spacectl.exe cache mount --dry_run=false --path="$target" -o json | ConvertFrom-Json
+          if (-not $json.output.mounts[0].cache_hit) {
+            throw "expected cache_hit=true on re-mount"
+          }
+          Write-Host "Cache hit confirmed on re-mount"
+
   # Validate Xcode DerivedData hash
   xcode-hash:
     name: Xcode hash validation
