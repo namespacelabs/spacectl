@@ -28,7 +28,7 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Nix cache
-        uses: namespacelabs/nscloud-cache-action@d6b68aa38adace8976c09629021052d57bb1ce9c # v1.5.0
+        uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           path: /nix
 
@@ -43,7 +43,7 @@ jobs:
         uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
 
       - name: Set up cache
-        uses: namespacelabs/nscloud-cache-action@d6b68aa38adace8976c09629021052d57bb1ce9c # v1.5.0
+        uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
         with:
           cache: go
 
