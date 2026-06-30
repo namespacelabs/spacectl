@@ -35,9 +35,11 @@ jobs:
           fi
           echo "All mode tests passed"
 
-  # Builds the spacectl binary and runs binary integration tests
-  spacectl-binary:
-    name: spacectl binary
+  # Builds the spacectl binary and runs CLI-level integration tests (version
+  # output and `cache mount` flag parsing). These run in dry-run mode and do
+  # not mount anything; the spacectl-mount-* jobs cover real mounting.
+  spacectl-cli:
+    name: spacectl cli
     runs-on:
       - nscloud-ubuntu-22.04-amd64-4x8
     steps:
@@ -63,6 +65,147 @@ jobs:
           INTEGRATION_SPACECTL_BIN_COMMIT: ${{ github.sha }}
           INTEGRATION_SPACECTL_BIN_DATE: "2025-01-01T00:00:00Z"
         run: go test -race -run TestIntegration_ ./...
+
+  # Builds the spacectl binary and performs a real (destructive) cache mount on
+  # Linux and macOS. Uses cache-backed runners so NSC_CACHE_PATH points at a
+  # real cache volume, exercising the bind-mount (Linux) / symlink (macOS) paths
+  # end-to-end.
+  spacectl-mount-unix:
+    name: spacectl-mount-${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            runner:
+              - nscloud-ubuntu-22.04-amd64-4x8-with-cache
+              - nscloud-cache-size-20gb
+              - nscloud-cache-tag-integration-linux
+          - name: osx
+            runner:
+              - nscloud-macos-tahoe-arm64-12x28-with-cache
+              - nscloud-cache-size-20gb
+              - nscloud-cache-tag-integration-macos
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build spacectl
+        run: go build -o dist/spacectl .
+
+      - name: Mount cache directory
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NSC_CACHE_PATH:-}" ]; then
+            echo "NSC_CACHE_PATH is not set; expected the cache-backed runner to provide it" >&2
+            exit 1
+          fi
+          echo "NSC_CACHE_PATH=$NSC_CACHE_PATH"
+
+          target="$RUNNER_TEMP/spacectl-mount-test"
+          rm -rf "$target"
+
+          # Destructive mount: link $target to a directory on the cache volume.
+          ./dist/spacectl cache mount --dry_run=false --path="$target" -o json
+
+          echo "MOUNT_TARGET=$target" >> "$GITHUB_ENV"
+
+      - name: Verify mount
+        run: |
+          set -euo pipefail
+          target="$MOUNT_TARGET"
+
+          # Writing through the mount must land on the cache volume.
+          echo hello > "$target/sentinel.txt"
+          found=$(find "$NSC_CACHE_PATH" -name sentinel.txt 2>/dev/null | head -n1 || true)
+          if [ -z "$found" ]; then
+            echo "sentinel.txt not found under NSC_CACHE_PATH; mount did not route writes to the cache volume" >&2
+            exit 1
+          fi
+          echo "Write routed to cache: $found"
+
+          # Re-mounting the same path must now report a cache hit.
+          out=$(./dist/spacectl cache mount --dry_run=false --path="$target" -o json)
+          echo "$out"
+          if ! echo "$out" | grep -q '"cache_hit": true'; then
+            echo "expected cache_hit=true on re-mount" >&2
+            exit 1
+          fi
+          echo "Cache hit confirmed on re-mount"
+
+  # Builds the spacectl binary and performs a real (destructive) cache mount on
+  # Windows. Uses a cache-backed runner so NSC_CACHE_PATH points at a real cache
+  # volume, exercising the NTFS junction mount path end-to-end.
+  spacectl-mount-windows:
+    name: spacectl-mount-windows
+    runs-on:
+      - nscloud-windows-2022-amd64-4x8-with-cache
+      - nscloud-cache-size-20gb
+      - nscloud-cache-tag-integration-windows
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build spacectl
+        shell: bash
+        run: go build -o dist/spacectl.exe .
+
+      - name: Mount cache directory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          if (-not $env:NSC_CACHE_PATH) {
+            throw "NSC_CACHE_PATH is not set; expected the cache-backed runner to provide it"
+          }
+          Write-Host "NSC_CACHE_PATH=$env:NSC_CACHE_PATH"
+
+          $target = Join-Path $env:RUNNER_TEMP 'spacectl-mount-test'
+          if (Test-Path $target) { Remove-Item -Recurse -Force $target }
+
+          # Destructive mount: create an NTFS junction at $target backed by the cache volume.
+          & .\dist\spacectl.exe cache mount --dry_run=false --path="$target" -o json
+          if ($LASTEXITCODE -ne 0) { throw "spacectl cache mount failed" }
+
+          "MOUNT_TARGET=$target" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Verify mount
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = $env:MOUNT_TARGET
+
+          # The target must be a reparse point (junction), not a plain directory.
+          $item = Get-Item -Force $target
+          if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "expected $target to be a junction, got attributes: $($item.Attributes)"
+          }
+          Write-Host "Junction created: $target -> $($item.Target)"
+
+          # Writing through the junction must land on the cache volume.
+          'hello' | Out-File -FilePath (Join-Path $target 'sentinel.txt') -Encoding ascii
+          $found = Get-ChildItem -Path $env:NSC_CACHE_PATH -Recurse -Filter sentinel.txt -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $found) {
+            throw "sentinel.txt not found under NSC_CACHE_PATH; junction did not route writes to the cache volume"
+          }
+          Write-Host "Write routed to cache: $($found.FullName)"
+
+          # Re-mounting the same path must now report a cache hit.
+          $json = & .\dist\spacectl.exe cache mount --dry_run=false --path="$target" -o json | ConvertFrom-Json
+          if (-not $json.output.mounts[0].cache_hit) {
+            throw "expected cache_hit=true on re-mount"
+          }
+          Write-Host "Cache hit confirmed on re-mount"
 
   # Validate Xcode DerivedData hash
   xcode-hash:

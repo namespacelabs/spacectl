@@ -49,81 +49,34 @@ jobs:
           go generate -x ./...
           git add . && git diff --staged --exit-code
 
-      - name: Check tests
-        run: go test -race ./...
-
       - name: Check linter
         run: |
           golangci-lint run ./...
 
-  space-e2e-release:
-    runs-on:
-      - nscloud-ubuntu-22.04-amd64-4x16-with-cache
-      - nscloud-cache-size-20gb
-      - nscloud-cache-tag-spacectl
+  test:
+    name: test (${{ matrix.name }})
     strategy:
+      fail-fast: false
       matrix:
-        space-version: ['', latest]
+        include:
+          - name: linux
+            machine: nscloud-ubuntu-22.04-amd64-8x16
+            args: -race
+          - name: macos
+            machine: nscloud-macos-tahoe-arm64-12x28
+            args: -race
+          - name: windows
+            machine: nscloud-windows-2022-amd64-8x16
+            args: ""
+    runs-on: ${{ matrix.machine }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
 
-      - name: Set up Nix cache
-        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          space-version: '${{ matrix.space-version }}'
-          cache: nix
+          go-version-file: go.mod
+          cache: false
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
-        with:
-          extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-            system-features = kvm nixos-test
-
-      - name: Switch into Nix Shell
-        uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
-
-      - name: Set up Go cache
-        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
-        with:
-          space-version: '${{ matrix.space-version }}'
-          cache: go
-
-      - name: Force cache
-        run: go mod download
-
-  space-e2e-head:
-    runs-on:
-      - nscloud-ubuntu-22.04-amd64-4x16-with-cache
-      - nscloud-cache-size-20gb
-      - nscloud-cache-tag-spacectl
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
-
-      - name: Set up Nix cache
-        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
-        with:
-          cache: nix
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
-        with:
-          extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-            system-features = kvm nixos-test
-
-      - name: Switch into Nix Shell
-        uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
-
-      - name: Install spacectl from HEAD
-        run: go build -o dist/spacectl .
-
-      - name: Set up Go cache
-        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
-        with:
-          cache: go
-        env:
-          NSC_POWERTOYS_DIR: ./dist/ # force binary location
-
-      - name: Force cache
-        run: go mod download
+      - name: Run tests
+        run: go test ${{ matrix.args }} ./...
