@@ -836,6 +836,89 @@ func TestGradleProvider_Plan(t *testing.T) {
 	})
 }
 
+// KotlinNativeProvider tests
+
+func TestKotlinNativeProvider_Detect(t *testing.T) {
+	t.Run("detected when kotlinc-native exists", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					require.Equal(t, "kotlinc-native", file)
+					return "/usr/local/bin/kotlinc-native", nil
+				},
+			},
+		}
+
+		p := mode.KotlinNativeProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.True(t, detected)
+	})
+
+	t.Run("detected when only konanc exists", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					if file == "konanc" {
+						return "/usr/local/bin/konanc", nil
+					}
+					return "", exec.ErrNotFound
+				},
+			},
+		}
+
+		p := mode.KotlinNativeProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.True(t, detected)
+	})
+
+	t.Run("not detected when no binary exists", func(t *testing.T) {
+		req := mode.DetectRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "", exec.ErrNotFound
+				},
+			},
+		}
+
+		p := mode.KotlinNativeProvider{}
+		detected, err := p.Detect(t.Context(), req)
+		require.NoError(t, err)
+		require.False(t, detected)
+	})
+}
+
+func TestKotlinNativeProvider_Plan(t *testing.T) {
+	t.Run("returns default konan path", func(t *testing.T) {
+		t.Setenv("KONAN_DATA_DIR", "")
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{},
+		}
+
+		p := mode.KotlinNativeProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Len(t, result.MountPaths, 1)
+		require.Equal(t, "~/.konan", result.MountPaths[0])
+	})
+
+	t.Run("honors KONAN_DATA_DIR override", func(t *testing.T) {
+		t.Setenv("KONAN_DATA_DIR", "/custom/konan")
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{},
+		}
+
+		p := mode.KotlinNativeProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Len(t, result.MountPaths, 1)
+		require.Equal(t, "/custom/konan", result.MountPaths[0])
+	})
+}
+
 // MavenProvider tests
 
 func TestMavenProvider_Detect(t *testing.T) {

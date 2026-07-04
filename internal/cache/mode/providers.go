@@ -517,6 +517,42 @@ func (p GradleProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, 
 	}, nil
 }
 
+// KotlinNativeProvider
+
+const (
+	kotlinNativeDataDirKey  = "KONAN_DATA_DIR"
+	kotlinNativeDefaultPath = "~/.konan"
+)
+
+type KotlinNativeProvider struct{}
+
+func (p KotlinNativeProvider) Name() string {
+	return "kotlin-native"
+}
+
+func (p KotlinNativeProvider) Detect(ctx context.Context, req DetectRequest) (bool, error) {
+	for _, bin := range []string{"kotlinc-native", "konanc"} {
+		if _, err := req.Exec.LookPath(bin); err == nil {
+			return true, nil
+		} else if !errors.Is(err, exec.ErrNotFound) {
+			return false, fmt.Errorf("lookpath %s: %w", bin, err)
+		}
+	}
+
+	return false, nil
+}
+
+func (p KotlinNativeProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
+	mountTarget := kotlinNativeDefaultPath
+	if dir := os.Getenv(kotlinNativeDataDirKey); dir != "" {
+		mountTarget = dir
+	}
+
+	return PlanResult{
+		MountPaths: []string{mountTarget},
+	}, nil
+}
+
 // MavenProvider
 
 const (
