@@ -23,6 +23,7 @@ func DefaultModes() Modes {
 		GoProvider{},
 		GolangCILintProvider{},
 		GradleProvider{},
+		KotlinNativeProvider{},
 		MavenProvider{},
 		MiseProvider{},
 		NixProvider{},
