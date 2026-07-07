@@ -2095,19 +2095,115 @@ func TestRustProvider_Detect(t *testing.T) {
 }
 
 func TestRustProvider_Plan(t *testing.T) {
-	t.Run("returns cargo and target paths", func(t *testing.T) {
+	t.Run("falls back to defaults when cargo is absent", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home) // os.UserHomeDir reads USERPROFILE on Windows
+		t.Setenv("CARGO_HOME", "")
+		t.Setenv("CARGO_TARGET_DIR", "")
+
 		req := mode.PlanRequest{
-			Exec: &mode.ExecutorMock{},
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "", exec.ErrNotFound
+				},
+			},
 		}
 
 		p := mode.RustProvider{}
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
 		require.Equal(t, []string{
-			"~/.cargo/registry",
-			"~/.cargo/git",
+			filepath.Join(home, ".cargo", "registry"),
+			filepath.Join(home, ".cargo", "git"),
 			"./target",
-			"~/.cargo/.global-cache",
+			filepath.Join(home, ".cargo", ".global-cache"),
+		}, result.MountPaths)
+	})
+
+	t.Run("uses target directory reported by cargo metadata", func(t *testing.T) {
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/local/bin/cargo", nil
+				},
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return []byte(`{"target_directory":"/workspace/root/target"}`), nil
+				},
+			},
+		}
+
+		p := mode.RustProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, "/workspace/root/target", result.MountPaths[2])
+	})
+
+	t.Run("keeps relative ./target when cargo reports the default <cwd>/target", func(t *testing.T) {
+		// The old hardcoded "./target" already handled this case correctly, so
+		// the mount path (and thus the cache location) must stay "./target" to
+		// avoid invalidating existing caches.
+		cwd := t.TempDir()
+		t.Chdir(cwd)
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/local/bin/cargo", nil
+				},
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					meta := fmt.Sprintf(`{"target_directory":%q}`, filepath.Join(cwd, "target"))
+					return []byte(meta), nil
+				},
+			},
+		}
+
+		p := mode.RustProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, "./target", result.MountPaths[2])
+	})
+
+	t.Run("falls back to CARGO_TARGET_DIR when cargo metadata fails", func(t *testing.T) {
+		t.Setenv("CARGO_TARGET_DIR", "/custom/target")
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "/usr/local/bin/cargo", nil
+				},
+				OutputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+					return nil, fmt.Errorf("cargo metadata failed")
+				},
+			},
+		}
+
+		p := mode.RustProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, "/custom/target", result.MountPaths[2])
+	})
+
+	t.Run("honors CARGO_HOME", func(t *testing.T) {
+		t.Setenv("CARGO_HOME", filepath.Join("opt", "cargo"))
+		t.Setenv("CARGO_TARGET_DIR", "")
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{
+				LookPathFunc: func(file string) (string, error) {
+					return "", exec.ErrNotFound
+				},
+			},
+		}
+
+		p := mode.RustProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{
+			filepath.Join("opt", "cargo", "registry"),
+			filepath.Join("opt", "cargo", "git"),
+			"./target",
+			filepath.Join("opt", "cargo", ".global-cache"),
 		}, result.MountPaths)
 	})
 }
