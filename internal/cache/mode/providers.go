@@ -1058,7 +1058,11 @@ func (p RubyProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, er
 
 // RustProvider
 
-const rustCargoToml = "Cargo.toml"
+const (
+	rustCargoToml     = "Cargo.toml"
+	cargoHomeKey      = "CARGO_HOME"
+	cargoTargetDirKey = "CARGO_TARGET_DIR"
+)
 
 type RustProvider struct{}
 
@@ -1085,15 +1089,52 @@ func (p RustProvider) Detect(ctx context.Context, req DetectRequest) (bool, erro
 }
 
 func (p RustProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
-	// Do not cache the whole ~/.cargo dir as it contains ~/.cargo/bin, where the cargo binary lives.
+	// CARGO_HOME overrides the conventional ~/.cargo.
+	cargoHome := os.Getenv(cargoHomeKey)
+	if cargoHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return PlanResult{}, fmt.Errorf("get user home dir: %w", err)
+		}
+		cargoHome = filepath.Join(home, ".cargo")
+	}
+
+	// Do not cache the whole cargo home dir as it contains bin/, where the cargo binary lives.
 	return PlanResult{
 		MountPaths: []string{
-			"~/.cargo/registry",
-			"~/.cargo/git",
-			"./target",
-			"~/.cargo/.global-cache", // Cache cleaning feature uses SQLite file: https://blog.rust-lang.org/2023/12/11/cargo-cache-cleaning.html
+			filepath.Join(cargoHome, "registry"),
+			filepath.Join(cargoHome, "git"),
+			rustTargetDir(ctx, req),
+			filepath.Join(cargoHome, ".global-cache"), // Cache cleaning feature uses SQLite file: https://blog.rust-lang.org/2023/12/11/cargo-cache-cleaning.html
 		},
 	}, nil
+}
+
+// rustTargetDir resolves cargo's target directory via `cargo metadata`, falling
+// back to CARGO_TARGET_DIR and finally ./target when cargo is absent. It keeps
+// emitting the relative ./target when cargo reports the default <cwd>/target, so
+// the cache location is unchanged for the common case.
+func rustTargetDir(ctx context.Context, req PlanRequest) string {
+	const defaultTargetDir = "./target"
+
+	if _, err := req.Exec.LookPath("cargo"); err == nil {
+		cmd := exec.CommandContext(ctx, "cargo", "metadata", "--format-version", "1", "--no-deps", "--offline")
+		if out, err := req.Exec.Output(cmd); err == nil {
+			var meta struct {
+				TargetDirectory string `json:"target_directory"`
+			}
+			if json.Unmarshal(out, &meta) == nil && meta.TargetDirectory != "" {
+				if cwd, err := os.Getwd(); err == nil && meta.TargetDirectory == filepath.Join(cwd, "target") {
+					return defaultTargetDir
+				}
+				return meta.TargetDirectory
+			}
+		}
+	}
+	if dir := os.Getenv(cargoTargetDirKey); dir != "" {
+		return dir
+	}
+	return defaultTargetDir
 }
 
 // SwiftPMProvider
