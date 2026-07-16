@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
 
       - name: Set up Nix cache
-        uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: nix
 
@@ -35,7 +35,7 @@ jobs:
         uses: rcrowe/switch-into-nix-shell@b109dab0869e1f5665d6eacc246cc5282da53811 # v1
 
       - name: Set up cache
-        uses: namespacelabs/nscloud-cache-action@58bf6e08898e88803c098e2b522668541cd3b2e3 # v1.6.0
+        uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
         with:
           cache: |
             go

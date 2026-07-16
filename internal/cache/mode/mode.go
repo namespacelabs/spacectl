@@ -35,7 +35,6 @@ func DefaultModes() Modes {
 		RubyProvider{},
 		RustProvider{},
 		SwiftPMProvider{},
-		TuistProvider{},
 		UVProvider{},
 		XcodeProvider{},
 		YarnProvider{},
