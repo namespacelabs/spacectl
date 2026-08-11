@@ -23,7 +23,7 @@ jobs:
       - nscloud-cache-size-20gb
       - nscloud-cache-tag-spacectl-pnpm-${{ matrix.pnpm-version }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
       - name: Set up Go cache
         uses: namespacelabs/nscloud-cache-action@c5f8dab7560444c4bf8dbc64f1b203431873c547 # v1.6.1
@@ -38,7 +38,7 @@ jobs:
       - name: Install spacectl from HEAD
         run: go build -o dist/spacectl .
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: ${{ matrix.pnpm-version }}
 
