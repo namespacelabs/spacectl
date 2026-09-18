@@ -833,8 +833,8 @@ func TestGradleProvider_Plan(t *testing.T) {
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
 		require.Equal(t, []string{
-			"~/.gradle/caches",
-			"~/.gradle/wrapper",
+			filepath.Join("~/.gradle", "caches"),
+			filepath.Join("~/.gradle", "wrapper"),
 		}, result.MountPaths)
 	})
 
@@ -849,8 +849,8 @@ func TestGradleProvider_Plan(t *testing.T) {
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
 		require.Equal(t, []string{
-			"/workspace/custom-gradle-home/caches",
-			"/workspace/custom-gradle-home/wrapper",
+			filepath.Join("/workspace/custom-gradle-home", "caches"),
+			filepath.Join("/workspace/custom-gradle-home", "wrapper"),
 		}, result.MountPaths)
 	})
 }
