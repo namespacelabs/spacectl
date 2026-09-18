@@ -473,10 +473,10 @@ func (p GolangCILintProvider) Plan(ctx context.Context, req PlanRequest) (PlanRe
 // GradleProvider
 
 const (
-	gradleCachesPath  = "~/.gradle/caches"
-	gradleWrapperPath = "~/.gradle/wrapper"
-	gradlewFile       = "gradlew"
-	buildGradleFile   = "build.gradle"
+	gradleUserHomeKey     = "GRADLE_USER_HOME"
+	gradleDefaultUserHome = "~/.gradle"
+	gradlewFile           = "gradlew"
+	buildGradleFile       = "build.gradle"
 )
 
 type GradleProvider struct{}
@@ -509,10 +509,15 @@ func (p GradleProvider) Detect(ctx context.Context, req DetectRequest) (bool, er
 }
 
 func (p GradleProvider) Plan(ctx context.Context, req PlanRequest) (PlanResult, error) {
+	gradleUserHome := os.Getenv(gradleUserHomeKey)
+	if gradleUserHome == "" {
+		gradleUserHome = gradleDefaultUserHome
+	}
+
 	return PlanResult{
 		MountPaths: []string{
-			gradleCachesPath,
-			gradleWrapperPath,
+			filepath.Join(gradleUserHome, "caches"),
+			filepath.Join(gradleUserHome, "wrapper"),
 		},
 	}, nil
 }

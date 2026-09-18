@@ -822,7 +822,9 @@ func TestGradleProvider_Detect(t *testing.T) {
 }
 
 func TestGradleProvider_Plan(t *testing.T) {
-	t.Run("returns mount paths", func(t *testing.T) {
+	t.Run("returns default mount paths", func(t *testing.T) {
+		t.Setenv("GRADLE_USER_HOME", "")
+
 		req := mode.PlanRequest{
 			Exec: &mode.ExecutorMock{},
 		}
@@ -830,9 +832,26 @@ func TestGradleProvider_Plan(t *testing.T) {
 		p := mode.GradleProvider{}
 		result, err := p.Plan(t.Context(), req)
 		require.NoError(t, err)
-		require.Len(t, result.MountPaths, 2)
-		require.Equal(t, "~/.gradle/caches", result.MountPaths[0])
-		require.Equal(t, "~/.gradle/wrapper", result.MountPaths[1])
+		require.Equal(t, []string{
+			"~/.gradle/caches",
+			"~/.gradle/wrapper",
+		}, result.MountPaths)
+	})
+
+	t.Run("respects GRADLE_USER_HOME", func(t *testing.T) {
+		t.Setenv("GRADLE_USER_HOME", "/workspace/custom-gradle-home")
+
+		req := mode.PlanRequest{
+			Exec: &mode.ExecutorMock{},
+		}
+
+		p := mode.GradleProvider{}
+		result, err := p.Plan(t.Context(), req)
+		require.NoError(t, err)
+		require.Equal(t, []string{
+			"/workspace/custom-gradle-home/caches",
+			"/workspace/custom-gradle-home/wrapper",
+		}, result.MountPaths)
 	})
 }
 
